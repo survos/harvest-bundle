@@ -66,7 +66,7 @@ class SurvosHarvestBundle extends AbstractBundle implements CompilerPassInterfac
         $container->registerAttributeForAutoconfiguration(
             MapperAttr::class,
             static function (Definition $definition, MapperAttr $attr, \ReflectionClass $ref): void {
-                $definition->addTag('pixie.dto', [
+                $definition->addTag('harvest', [
                     'priority' => $attr->priority,
                     'when' => $attr->when,
                     'except' => $attr->except,
