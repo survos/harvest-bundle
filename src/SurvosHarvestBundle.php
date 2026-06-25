@@ -5,6 +5,7 @@ namespace Survos\HarvestBundle;
 
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
+use Symfony\Component\DependencyInjection\Compiler\PassConfig;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -75,9 +76,7 @@ class SurvosHarvestBundle extends AbstractBundle implements CompilerPassInterfac
             }
         );
 
-        // If you still want this class as a compiler pass for other reasons, keep it.
-        // Otherwise, you can drop the addCompilerPass($this) call entirely.
-        $container->addCompilerPass($this);
+        $container->addCompilerPass($this, PassConfig::TYPE_BEFORE_OPTIMIZATION);
     }
 
 }
