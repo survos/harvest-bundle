@@ -49,6 +49,8 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
             ->scalarNode('lock_factory')->defaultValue('lock.factory')->end()
             ->integerNode('catalog_ttl')->min(0)->defaultValue(300)->end()
             ->booleanNode('schedule_enabled')->defaultTrue()->end()
+            ->scalarNode('schedule_interval')->info('A RecurringMessage::every() interval, e.g. "2 minutes".')
+                ->defaultValue('%env(default:survos_harvest.default_interval:HARVEST_SYNC_INTERVAL)%')->cannotBeEmpty()->end()
             ->arrayNode('sites')->normalizeKeys(false)->useAttributeAsKey('code')->arrayPrototype()->children()
                 ->arrayNode('hosts')->isRequired()->requiresAtLeastOneElement()->scalarPrototype()->end()->end()
                 ->arrayNode('sets')->isRequired()->requiresAtLeastOneElement()->scalarPrototype()->end()->end()
@@ -79,7 +81,7 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
         $services->set(RecordedMembership::class);
         $services->alias(RecordedMembershipProvider::class, RecordedMembership::class);
         if ($config['schedule_enabled']) {
-            $services->set(HarvestSchedule::class)->arg('$cache', new Reference('cache.app'));
+            $services->set(HarvestSchedule::class)->args(['$cache' => new Reference('cache.app'), '$interval' => $config['schedule_interval']]);
         }
         $services->set(CatalogBrowser::class);
         $services->set(HarvestSearch::class)->arg('$cache', new Reference('cache.app'));
@@ -106,6 +108,7 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
         }
         $builder->setParameter('survos_harvest.default_server', 'https://harvest.survos.com');
         $builder->setParameter('survos_harvest.empty_token', '');
+        $builder->setParameter('survos_harvest.default_interval', '2 minutes');
         $bag = $builder->getParameterBag();
         if ($bag instanceof \Symfony\Component\DependencyInjection\ParameterBag\EnvPlaceholderParameterBag) {
             \Symfony\Component\Config\Definition\BaseNode::setPlaceholderUniquePrefix($bag->getEnvPlaceholderUniquePrefix());
