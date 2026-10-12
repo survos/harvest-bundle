@@ -72,6 +72,8 @@ server for downloads; remove conflicting legacy `survos_folio.folio_server` or
 `dataset_api` settings. `local_passthrough: true` uses an existing shared folio
 volume; it never shares a registry database. `lock_factory` defaults to
 `lock.factory` and must use a store shared by sync workers for this application.
+The lock key is derived from the application's database, so separate apps on one
+machine (each with `LOCK_DSN=flock`) never block each other's syncs.
 
 ## Preview, migrate and sync
 

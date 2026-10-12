@@ -29,6 +29,20 @@ final readonly class HarvestCatalog
         return $this->em->getConnection()->createSchemaManager()->tablesExist($tables);
     }
 
+    /**
+     * The sync lock's key: one per application database, since the lock guards this catalog and
+     * checkpoint, not Harvest. A fixed name made every consumer on one machine (flock in the shared
+     * temp dir) exclude every other; instances of one app share a database and so still share it.
+     */
+    public function lockKey(): string
+    {
+        $params = $this->em->getConnection()->getParams();
+        $identity = array_intersect_key($params, array_flip(['driver', 'host', 'port', 'dbname', 'path', 'url', 'memory', 'unix_socket']));
+        ksort($identity);
+
+        return 'survos_harvest.sync.'.hash('xxh128', serialize($identity));
+    }
+
     public function checkpoint(): ?array
     {
         $row = $this->em->find(HarvestSyncCheckpoint::class, 'harvest');

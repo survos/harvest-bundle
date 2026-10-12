@@ -186,6 +186,32 @@ final class HarvestSyncTest extends TestCase
         self::assertSame(0, (int) $db->fetchOne('SELECT COUNT(*) FROM harvest_sync_checkpoint'));
     }
 
+    public function testLockIsScopedToTheApplicationDatabase(): void
+    {
+        $catalogFor = function (array $params): HarvestCatalog {
+            $config = ORMSetup::createAttributeMetadataConfiguration([dirname(__DIR__).'/src/Entity'], true);
+            $config->enableNativeLazyObjects(true);
+            return new HarvestCatalog(new EntityManager(DriverManager::getConnection($params), $config), $this->client);
+        };
+        $a = $catalogFor(['driver' => 'pdo_sqlite', 'path' => '/tmp/app-a.db']);
+        self::assertSame($a->lockKey(), $catalogFor(['driver' => 'pdo_sqlite', 'path' => '/tmp/app-a.db'])->lockKey());
+        self::assertNotSame($a->lockKey(), $catalogFor(['driver' => 'pdo_sqlite', 'path' => '/tmp/app-b.db'])->lockKey(),
+            'Two apps on one machine must not exclude each other');
+        self::assertStringNotContainsString('secret', $catalogFor(['driver' => 'pdo_sqlite', 'path' => '/tmp/app-a.db', 'password' => 'secret'])->lockKey());
+    }
+
+    public function testConcurrentSyncOfTheSameDatabaseIsRefused(): void
+    {
+        $this->installSchema();
+        $locks = new LockFactory(new InMemoryStore());
+        $held = $locks->createLock($this->catalog->lockKey());
+        self::assertTrue($held->acquire());
+        $sync = new HarvestSync($this->client, $this->catalog, new Selection([]), $this->createStub(FolioAcquisition::class), $locks);
+        self::assertSame(1, $sync->sync($this->io()));
+        self::assertSame([], $this->requests);
+        $held->release();
+    }
+
     public function testMissingSchemaFailsBeforeFetchingForRealSync(): void
     {
         self::assertSame(1, $this->sync($this->createStub(FolioAcquisition::class))->sync($this->io()));

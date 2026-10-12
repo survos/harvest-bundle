@@ -32,8 +32,7 @@ final readonly class HarvestSync
         #[Option('Preview remote changes and selection without writes or downloads')] bool $dry = false,
         #[Option('Fetch the complete Harvest catalog before replaying changes')] bool $full = false,
     ): int {
-        // Keep the legacy lock name while consumers migrate between bundles.
-        $lock = $this->locks->createLock('survos_dataset.harvest-sync', ttl: null);
+        $lock = $this->locks->createLock($this->catalog->lockKey(), ttl: null);
         try {
             // Dry runs neither acquire a lock nor create a lock table/file.
             if (!$dry && !$lock->acquire()) {
