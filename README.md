@@ -31,11 +31,9 @@ composer require survos/harvest-bundle
 
 Symfony Flex discovers `Survos\HarvestBundle\SurvosHarvestBundle`. If Flex is
 not used, register it and `Survos\Kit\SurvosKitBundle` in `config/bundles.php`.
-Copy `config/survos_harvest.yaml` to the application's `config/packages/`:
-
-```yaml
-survos_harvest: {}
-```
+No application configuration file is needed for this scaffold. Future options
+will be defined in `SurvosHarvestBundle::configure()` and configured by consumers
+in their own `config/packages/survos_harvest.yaml`.
 
 No API Platform dependency is required.
 

@@ -7,11 +7,10 @@ namespace Survos\HarvestBundle\Tests;
 use PHPUnit\Framework\TestCase;
 use Survos\HarvestBundle\SurvosHarvestBundle;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
-use Symfony\Component\Yaml\Yaml;
 
 final class SurvosHarvestBundleTest extends TestCase
 {
-    public function testScaffoldCompilesWithTheShippedConfiguration(): void
+    public function testScaffoldCompilesWithoutApplicationConfiguration(): void
     {
         $bundle = new SurvosHarvestBundle();
         $extension = $bundle->getContainerExtension();
@@ -21,8 +20,7 @@ final class SurvosHarvestBundleTest extends TestCase
         $container = new ContainerBuilder();
         $bundle->build($container);
         $container->registerExtension($extension);
-        $config = Yaml::parseFile(dirname(__DIR__).'/config/survos_harvest.yaml');
-        $container->loadFromExtension($extension->getAlias(), $config[$extension->getAlias()]);
+        $container->loadFromExtension($extension->getAlias(), []);
         $container->compile();
 
         self::assertTrue($container->isCompiled());
