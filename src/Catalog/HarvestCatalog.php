@@ -55,12 +55,13 @@ final readonly class HarvestCatalog
     }
 
     /** @return array<string, string> */
-    public function acquiredRevisions(): array
+    public function acquiredRevisions(?string $source = null): array
     {
+        $source ??= $this->client->source();
         $revisions = [];
         foreach ($this->em->getRepository(Artifact::class)->findAll() as $artifact) {
             $this->em->refresh($artifact);
-            if ($artifact->acquiredRevision !== null && $artifact->dataset->source === $this->client->source()) {
+            if ($artifact->acquiredRevision !== null && $artifact->dataset->source === $source) {
                 $revisions[$artifact->id] = $artifact->acquiredRevision;
             }
         }
@@ -97,10 +98,26 @@ final readonly class HarvestCatalog
         return !$this->schemaReady() || $this->checkpoint() === null;
     }
 
-    /** Persist metadata, membership, acquisition receipts and cursor in one transaction. */
-    public function commit(SyncPlan $plan, array $acquired, ?\Closure $afterMembership = null): void
+    /**
+     * Persist metadata, membership, acquisition receipts and cursor in one transaction.
+     *
+     * $purge (harvest:sync --full) empties every table this catalog owns first, inside the same
+     * transaction, so the result mirrors exactly one Harvest -- switching HARVEST_SERVER between
+     * harvest.wip and harvest.survos.com leaves nothing of the other behind. Acquisition receipts
+     * from the SAME source are carried over, so a full resync does not re-download unchanged folios;
+     * a different source's receipts are dropped, as they are on any source change.
+     */
+    public function commit(SyncPlan $plan, array $acquired, ?\Closure $afterMembership = null, bool $purge = false): void
     {
-        $this->em->wrapInTransaction(function () use ($plan, $acquired, $afterMembership): void {
+        $this->em->wrapInTransaction(function () use ($plan, $acquired, $afterMembership, $purge): void {
+            if ($purge) {
+                $acquired += $this->acquiredRevisions($plan->checkpoint[Field::SOURCE]);
+                foreach ([SetMembership::class, Artifact::class, Dataset::class, HarvestSyncCheckpoint::class] as $class) {
+                    $this->em->createQuery(sprintf('DELETE FROM %s t', $class))->execute();
+                }
+                // DQL deletes bypass the identity map; forget the rows so find() below sees the purge.
+                $this->em->clear();
+            }
             $now = new \DateTimeImmutable();
             $datasets = $artifacts = $members = [];
             foreach ($plan->checkpoint[Field::ITEMS] as $key => $payload) {

@@ -30,7 +30,7 @@ final readonly class HarvestSync
     public function sync(
         SymfonyStyle $io,
         #[Option('Preview remote changes and selection without writes or downloads')] bool $dry = false,
-        #[Option('Fetch the complete Harvest catalog before replaying changes')] bool $full = false,
+        #[Option('Fetch the complete Harvest catalog and replace this app\'s copy of it (purges the harvest_* tables first, in the same transaction)')] bool $full = false,
     ): int {
         $lock = $this->locks->createLock($this->catalog->lockKey(), ttl: null);
         try {
@@ -66,9 +66,9 @@ final readonly class HarvestSync
             if ($dry) {
                 $io->success('Dry run complete. No database, checkpoint, catalog cache or folio files changed.');
             } else {
-                $this->catalog->commit($plan, $acquired, function () use ($io, $plan): void {
-                    $this->events?->dispatch(new HarvestSyncedEvent($io, $plan));
-                });
+                $this->catalog->commit($plan, $acquired, function () use ($io, $plan, $full): void {
+                    $this->events?->dispatch(new HarvestSyncedEvent($io, $plan, $full));
+                }, purge: $full);
                 $io->success('Harvest catalog, set membership and checkpoint committed to the application database.');
             }
 

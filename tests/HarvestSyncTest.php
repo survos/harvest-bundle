@@ -42,6 +42,7 @@ final class HarvestSyncTest extends TestCase
     private array $remote;
     private string $cursor = 'epoch:1';
     private array $requests = [];
+    private MockHttpClient $http;
 
     protected function setUp(): void
     {
@@ -50,7 +51,7 @@ final class HarvestSyncTest extends TestCase
         $config->enableNativeLazyObjects(true);
         $this->em = new EntityManager(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]), $config);
         $this->remote = [self::dataset('curatescape/a'), self::dataset('museum/b')];
-        $http = new MockHttpClient(function (string $method, string $url): MockResponse {
+        $this->http = $http = new MockHttpClient(function (string $method, string $url): MockResponse {
             $this->requests[] = $url;
             $body = match (true) {
                 str_contains($url, '/api/changes') => [Field::CURSOR => $this->cursor, Field::THROUGH => $this->cursor, Field::ITEMS => [], Field::HAS_MORE => false],
@@ -146,6 +147,37 @@ final class HarvestSyncTest extends TestCase
         self::assertSame([], $this->em->getRepository(Dataset::class)->findAll());
         self::assertSame([], $this->em->getRepository(Artifact::class)->findAll());
         self::assertSame([], $this->catalog->members('tours'));
+    }
+
+    public function testFullSyncAgainstAnotherHarvestLeavesNothingOfTheFirst(): void
+    {
+        $this->installSchema();
+        $acquire = $this->createStub(FolioAcquisition::class);
+        $acquire->method('acquire')->willReturn(true);
+        self::assertSame(0, $this->sync($acquire)->sync($this->io(), full: true));
+        self::assertCount(2, $this->em->getRepository(Dataset::class)->findAll());
+        self::assertCount(1, $this->catalog->acquiredRevisions());
+
+        // Point the same app at a different Harvest (harvest.wip -> harvest.survos.com).
+        $this->client = new DatasetPublicationClient($this->http, 'https://harvest.other', 'test-token');
+        $this->catalog = new HarvestCatalog($this->em, $this->client);
+        $this->remote = [self::dataset('curatescape/c')];
+        $never = $this->createStub(FolioAcquisition::class);
+        $never->method('acquire')->willReturn(false);
+        $events = new \Symfony\Component\EventDispatcher\EventDispatcher();
+        $seen = null;
+        $events->addListener(\Survos\HarvestBundle\Event\HarvestSyncedEvent::class,
+            static function (\Survos\HarvestBundle\Event\HarvestSyncedEvent $event) use (&$seen): void { $seen = $event->full; });
+        self::assertSame(0, $this->sync($never, events: $events)->sync($this->io(), full: true));
+        self::assertTrue($seen, 'listeners are told this plan is the whole catalog');
+
+        $this->em->clear();
+        $datasets = $this->em->getRepository(Dataset::class)->findAll();
+        self::assertSame(['curatescape/c'], array_map(static fn (Dataset $d): string => $d->datasetKey, $datasets));
+        self::assertSame('https://harvest.other', $datasets[0]->source);
+        self::assertCount(1, $this->em->getRepository(Artifact::class)->findAll());
+        self::assertSame([], $this->catalog->acquiredRevisions(), 'the first Harvest\'s receipts must not survive');
+        self::assertSame('https://harvest.other', $this->catalog->checkpoint()[Field::SOURCE]);
     }
 
     public function testRevisionChangesAndDeselectionPreserveAcquisitionHistory(): void
