@@ -77,6 +77,9 @@ final class HarvestSyncTest extends TestCase
         self::assertCount(2, $this->em->getRepository(Dataset::class)->findAll());
         self::assertCount(2, $this->em->getRepository(Artifact::class)->findAll());
         self::assertCount(1, $this->em->getRepository(SetMembership::class)->findAll());
+        $a = $this->em->find(Dataset::class, 'curatescape/a');
+        self::assertSame([2, [], null, []], [$a->rowCount, $a->tags, $a->contentType, $a->locales],
+            'row count, tags, content type and locales are columns, not only payload');
         self::assertSame(['curatescape/a'], array_map(fn ($e) => $e->datasetKey, $this->catalog->members('tours')));
         self::assertSame('epoch:1', $this->catalog->checkpoint()[Field::CURSOR]);
         self::assertCount(1, $this->catalog->acquiredRevisions());
@@ -178,6 +181,20 @@ final class HarvestSyncTest extends TestCase
         self::assertCount(1, $this->em->getRepository(Artifact::class)->findAll());
         self::assertSame([], $this->catalog->acquiredRevisions(), 'the first Harvest\'s receipts must not survive');
         self::assertSame('https://harvest.other', $this->catalog->checkpoint()[Field::SOURCE]);
+    }
+
+    public function testTranslatedVariantsAreListedAsLocales(): void
+    {
+        $this->installSchema();
+        $variant = $this->remote[1][Field::ARTIFACTS][0];
+        $variant[Field::CODE] = 'en';
+        $this->remote[1][Field::ARTIFACTS][] = $variant;
+        $this->remote[1][PropertyKey::TAGS] = ['photos'];
+        self::assertSame(0, $this->sync($this->createStub(FolioAcquisition::class), download: false)->sync($this->io(), full: true));
+        $this->em->clear();
+        $b = $this->em->find(Dataset::class, 'museum/b');
+        self::assertSame(['en'], $b->locales);
+        self::assertSame(['photos'], $b->tags);
     }
 
     public function testRevisionChangesAndDeselectionPreserveAcquisitionHistory(): void

@@ -24,6 +24,24 @@ final class Dataset
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     public ?string $description = null;
 
+    /**
+     * Facts copied out of $payload into real columns so an application can sort, facet and
+     * range-filter its catalog in DQL (zm's collection search) without keeping its own copy.
+     */
+    #[ORM\Column(name: 'row_count', nullable: true)]
+    public ?int $rowCount = null;
+
+    /** @var list<string> */
+    #[ORM\Column(type: Types::JSON, options: ['default' => '[]'])]
+    public array $tags = [];
+
+    #[ORM\Column(name: 'content_type', length: 64, nullable: true)]
+    public ?string $contentType = null;
+
+    /** @var list<string> locales with a published translated folio variant (the source build is not listed) */
+    #[ORM\Column(type: Types::JSON, options: ['default' => '[]'])]
+    public array $locales = [];
+
     #[ORM\Column(type: Types::JSON)]
     public array $payload;
 

@@ -16,7 +16,7 @@ The four entities in `src/Entity` auto-register with the default entity manager:
 
 | Entity | Table | Purpose |
 | --- | --- | --- |
-| `Dataset` | `harvest_dataset` | Remote identity, source, provider and public metadata snapshot |
+| `Dataset` | `harvest_dataset` | Remote identity, source, provider and public metadata snapshot; `row_count`, `tags`, `content_type` and `locales` are also columns so the app can sort and facet in DQL |
 | `Artifact` | `harvest_artifact` | Each artifact type/code, remote revision, URL and last locally acquired revision |
 | `SetMembership` | `harvest_set_membership` | Recorded dataset membership and download policy per named set |
 | `HarvestSyncCheckpoint` | `harvest_sync_checkpoint` | Last successfully applied feed cursor and dataset map |

@@ -131,6 +131,14 @@ final readonly class HarvestCatalog
                 $dataset->label = $payload[PropertyKey::LABEL];
                 $dataset->description = $payload[ItemField::DESCRIPTION];
                 $dataset->payload = $payload;
+                $dataset->rowCount = $payload[PropertyKey::ROW_COUNT] ?? null;
+                $dataset->tags = array_values($payload[PropertyKey::TAGS] ?? []);
+                $dataset->contentType = $payload[PropertyKey::CONTENT_TYPE] ?? null;
+                $dataset->locales = array_values(array_unique(array_map(
+                    static fn (FolioCatalogEntry $entry): string => (string) $entry->locale,
+                    array_filter(FolioCatalogEntry::fromDataset($payload, $this->client),
+                        static fn (FolioCatalogEntry $entry): bool => $entry->locale !== null),
+                )));
                 $dataset->syncedAt = $now;
                 $this->em->persist($dataset);
                 $datasets[$key] = $dataset;
