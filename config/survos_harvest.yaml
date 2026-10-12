@@ -1,0 +1,3 @@
+# Copy to config/packages/survos_harvest.yaml in the consuming application.
+# The publication scaffold has no configuration options yet.
+survos_harvest: {}
