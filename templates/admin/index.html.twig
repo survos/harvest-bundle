@@ -1,0 +1,49 @@
+{% extends '@SurvosHarvest/admin/layout.html.twig' %}
+{% block harvest_content %}
+    {% set syncResult = app.session.remove('survos_harvest.sync_result') %}
+    {% if syncResult %}
+        <section class="h-notice {{ syncResult.success ? '' : 'h-error' }}" role="status">
+            <strong>{{ syncResult.success ? (syncResult.dry ? 'Preview complete — no changes made.' : 'Synchronization complete.') : 'Sync could not finish. The checkpoint was not advanced.' }}</strong>
+            <details><summary>View sync details</summary><pre>{{ syncResult.output }}</pre></details>
+        </section>
+    {% endif %}
+    {% if not ready %}
+        <section class="h-notice"><h2>The local catalog is not installed yet</h2><p>Apply the application's Harvest database migration, then run your first sync. You can preview the selection or search Harvest now.</p><a href="{{ path('survos_harvest_help') }}">Open setup help →</a></section>
+    {% else %}
+        <div class="h-grid">
+            <div class="h-card"><span class="h-muted">Datasets known</span><strong class="h-stat">{{ summary.datasets|number_format }}</strong></div>
+            <div class="h-card"><span class="h-muted">Artifacts tracked</span><strong class="h-stat">{{ summary.artifacts|number_format }}</strong></div>
+            <div class="h-card"><span class="h-muted">Acquisition receipts</span><strong class="h-stat">{{ summary.acquired|number_format }}</strong></div>
+        </div>
+    {% endif %}
+    <section class="h-card h-toolbar">
+        <div><h2>Keep this app up to date</h2><p class="h-muted">{% if checkpoint %}Last successful sync {{ checkpoint[lastSyncField]|date('M j, Y · H:i T') }}{% else %}No successful sync recorded yet.{% endif %}</p></div>
+        <form method="post" action="{{ path('survos_harvest_sync') }}" class="h-actions" data-turbo="false">
+            <input type="hidden" name="_token" value="{{ csrf_token(constant('Survos\\HarvestBundle\\Controller\\HarvestAdminController::SYNC_TOKEN')) }}">
+            <button type="submit" name="dry" value="1" class="h-secondary">Preview sync</button>
+            <button type="submit" {% if not ready %}disabled{% endif %}>Sync now</button>
+        </form>
+    </section>
+    <section><div class="h-toolbar"><h2>Your folio sets</h2><a href="{{ path('survos_harvest_help') }}">How sets work →</a></div>
+        <div class="h-grid">
+        {% for code, set in sets %}
+            <div class="h-card"><h3>{{ set.label ?? code }}</h3><p class="h-muted">{{ set.download ? 'Track and download' : 'Track metadata only' }}</p><a href="{{ path('survos_harvest_admin', {set: code}) }}">{% if ready and summary.sets[code] is defined %}{{ summary.sets[code] }}{% else %}0{% endif %} recorded datasets →</a></div>
+        {% else %}<div class="h-card"><p>No sets are configured. Add a set to choose which folios this app tracks or downloads.</p><a href="{{ path('survos_harvest_help') }}">Create your first set →</a></div>{% endfor %}
+        </div>
+    </section>
+    {% if ready %}
+    <section class="h-card"><h2>Browse your local catalog</h2>
+        <form method="get" class="h-filters">
+            <label class="h-query">Search local datasets<input type="search" name="q" value="{{ query }}" placeholder="Title, dataset key or provider" maxlength="200"></label>
+            <label>Folio set<select name="set"><option value="">All datasets</option>{% for code, set in sets %}<option value="{{ code }}" {{ selectedSet == code ? 'selected' }}>{{ set.label ?? code }}</option>{% endfor %}</select></label>
+            <button type="submit">Search</button>
+        </form>
+        <p class="h-muted">{{ results.total|number_format }} datasets · reads this application's database</p>
+        <div class="h-table-wrap"><table><thead><tr><th>Dataset</th><th>Provider</th><th>Synced</th></tr></thead><tbody>
+        {% for dataset in results.items %}<tr><td><a href="{{ path('survos_harvest_dataset', {key: dataset.datasetKey}) }}"><strong>{{ dataset.label ?? dataset.datasetKey }}</strong></a><small>{{ dataset.datasetKey }}</small></td><td>{{ dataset.provider }}</td><td>{{ dataset.syncedAt|date('M j, H:i') }}</td></tr>
+        {% else %}<tr><td colspan="3" class="h-empty">No datasets match. Try a different search or sync the catalog.</td></tr>{% endfor %}
+        </tbody></table></div>
+        <div class="h-pagination"><span>Page {{ results.page }} of {{ results.pages }}</span><div class="h-actions">{% if results.page > 1 %}<a class="h-button h-secondary" href="{{ path('survos_harvest_admin', {q: query, set: selectedSet, page: results.page - 1}) }}">Previous</a>{% endif %}{% if results.page < results.pages %}<a class="h-button h-secondary" href="{{ path('survos_harvest_admin', {q: query, set: selectedSet, page: results.page + 1}) }}">Next</a>{% endif %}</div></div>
+    </section>
+    {% endif %}
+{% endblock %}

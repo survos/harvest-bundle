@@ -1,0 +1,7 @@
+{% extends '@SurvosHarvest/admin/layout.html.twig' %}
+{% block harvest_content %}
+<section class="h-card"><a href="{{ path('survos_harvest_admin') }}">← Local catalog</a><h2>{{ dataset.label ?? dataset.datasetKey }}</h2><p><code>{{ dataset.datasetKey }}</code></p>{% if dataset.description %}<p>{{ dataset.description }}</p>{% endif %}<dl><dt>Provider</dt><dd>{{ dataset.provider }}</dd><dt>Catalog updated</dt><dd>{{ dataset.syncedAt|date('M j, Y · H:i T') }}</dd></dl></section>
+<section class="h-card"><h2>Artifacts</h2><p class="h-muted">Remote availability and local acquisition are tracked separately. A receipt records a successful acquisition; it does not check whether the file still exists.</p><div class="h-table-wrap"><table><thead><tr><th>Type / variant</th><th>Remote revision</th><th>Last acquired</th><th>Availability</th></tr></thead><tbody>
+{% for artifact in artifacts %}<tr><td>{{ artifact.type }}<small>{{ artifact.code }}</small></td><td><code>{{ artifact.revision }}</code></td><td>{% if artifact.acquiredRevision is null %}Not acquired{% elseif artifact.acquiredRevision == artifact.revision %}<span class="h-pill">Current receipt</span>{% else %}Older revision{% endif %}</td><td>{{ artifact.downloadUrl is null ? 'No download published' : 'Download published' }}</td></tr>{% else %}<tr><td colspan="4">No artifacts published.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

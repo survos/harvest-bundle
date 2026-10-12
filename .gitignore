@@ -2,5 +2,6 @@
 composer.lock
 /tests/cache
 /tests/project-dir
+/config/reference.php
 # coverage
 /html

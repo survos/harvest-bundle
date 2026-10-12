@@ -1,0 +1,19 @@
+{% extends '@SurvosHarvest/admin/layout.html.twig' %}
+{% block harvest_content %}
+<section class="h-card"><h2>A folio set is this app's selection</h2><p>Choose a growing collection by provider or tags, or list exact dataset keys. A sync records the matching datasets in this application's database. Pages can read that membership even when Harvest is unavailable.</p><div class="h-grid"><div><h3>1. Discover</h3><p>Search Harvest for providers, tags and individual folios. Browsing never adopts a folio.</p></div><div><h3>2. Choose</h3><p>Define named sets in the application's configuration. Track metadata only, or also acquire the selected files.</p></div><div><h3>3. Preview and sync</h3><p>Preview shows the planned selection. Sync applies it and saves the checkpoint after successful processing.</p></div></div></section>
+<section class="h-card"><h2>Configure a set</h2><p>Edit the application's <code>config/packages/survos_harvest.yaml</code>. Configuration remains version-controlled; these pages do not rewrite it.</p><pre>survos_harvest:
+    folio_sets:
+        tours:
+            label: Tours
+            download: true
+            criteria:
+                provider: [curatescape]
+                minRows: 1
+        reading_list:
+            label: Reading list
+            download: false
+            criteria:
+                folios: ["curatescape/baltimore"]</pre><p><code>provider</code>, <code>tags</code> (any), <code>tagsAll</code>, <code>contentType</code> and <code>minRows</code> filter metadata together. Explicit <code>folios</code> additionally includes exact dataset keys. Empty criteria select nothing. A folio in multiple sets downloads if any of those sets enables downloads.</p><details><summary>This application's configured sets</summary><pre>{{ configuration }}</pre></details></section>
+<section class="h-card"><h2>Understand the two catalogs</h2><dl><dt>Local catalog</dt><dd>The last successful synchronization, stored in this application's database. Lists datasets, artifact revisions and recorded set membership.</dd><dt>Harvest API search</dt><dd>Reads the remote catalog with this application's server-side read token. Basic text search covers titles, keys, descriptions and tags. The catalog is cached for five minutes; Refresh fetches a new copy. No Harvest browser login is required.</dd><dt>Track only</dt><dd>Records metadata and membership without downloading folio files.</dd><dt>Download</dt><dd>Acquires a published compressed folio. If Harvest only lists an uncompressed folio, sync checks for an existing local file and keeps tracking the dataset.</dd></dl></section>
+<section class="h-card"><h2>Setup and troubleshooting</h2><ul><li>Apply this application's Harvest database migration before the first real sync. The bundle does not create a shared database connection.</li><li>Configure <code>HARVEST_READ_TOKEN</code> in the app's private environment. <code>HARVEST_SERVER</code> defaults to <code>https://harvest.survos.com</code>.</li><li>If a sync fails, the checkpoint stays unchanged. Review sync details, fix the cause and retry. Already downloaded files may be reused.</li><li>Removing a dataset from a set removes recorded membership on the next sync. It does not delete local folio files.</li><li>Only app administrators can access these pages or run sync. Tokens stay on the server.</li></ul></section>
+{% endblock %}

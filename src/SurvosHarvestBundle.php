@@ -7,6 +7,11 @@ namespace Survos\HarvestBundle;
 use Doctrine\ORM\EntityManagerInterface;
 use Survos\FolioBundle\Catalog\DatasetPublicationClient;
 use Survos\HarvestBundle\Catalog\HarvestCatalog;
+use Survos\HarvestBundle\Admin\CatalogBrowser;
+use Survos\HarvestBundle\Admin\HarvestSearch;
+use Survos\HarvestBundle\Controller\HarvestAdminController;
+use Survos\HarvestBundle\Menu\HarvestMenuSubscriber;
+use Survos\TablerBundle\Event\MenuEvent;
 use Survos\HarvestBundle\Sync\FolioAcquisition;
 use Survos\HarvestBundle\Sync\FolioDownloader;
 use Survos\HarvestBundle\Sync\HarvestSync;
@@ -14,6 +19,7 @@ use Survos\HarvestBundle\Sync\Selection;
 use Survos\Kit\AbstractSurvosBundle;
 use Survos\Kit\SurvosKitBundle;
 use Survos\Kit\Traits\HasDoctrineEntities;
+use Survos\Kit\Traits\HasConfigurableRoutes;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -26,10 +32,14 @@ use Symfony\Component\DependencyInjection\Reference;
 final class SurvosHarvestBundle extends AbstractSurvosBundle
 {
     use HasDoctrineEntities;
+    use HasConfigurableRoutes;
 
     public function configure(DefinitionConfigurator $definition): void
     {
+        $this->addRouteOptions($definition->rootNode()->children(), '/admin/harvest');
         $definition->rootNode()->children()
+            ->scalarNode('base_layout')->defaultValue('base.html.twig')->cannotBeEmpty()->end()
+            ->booleanNode('admin_navbar_menu')->defaultTrue()->end()
             ->scalarNode('server')->defaultValue('%env(default:survos_harvest.default_server:HARVEST_SERVER)%')->cannotBeEmpty()->end()
             ->scalarNode('read_token')->defaultValue('%env(default:survos_harvest.empty_token:HARVEST_READ_TOKEN)%')->end()
             ->scalarNode('lock_factory')->defaultValue('lock.factory')->end()
@@ -54,6 +64,12 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
         parent::loadExtension($config, $container, $builder);
         $services = $container->services()->defaults()->autowire()->autoconfigure();
         $services->set(HarvestCatalog::class)->arg('$em', new Reference(EntityManagerInterface::class));
+        $services->set(CatalogBrowser::class);
+        $services->set(HarvestSearch::class)->arg('$cache', new Reference('cache.app'));
+        $services->set(HarvestAdminController::class)->args(['$sets' => $config['folio_sets'], '$baseLayout' => $config['base_layout']]);
+        if ($config['routes_enabled'] && $config['admin_navbar_menu'] && class_exists(MenuEvent::class)) {
+            $services->set(HarvestMenuSubscriber::class);
+        }
         $services->set(Selection::class)->arg('$sets', $config['folio_sets']);
         $services->set(FolioDownloader::class)->arg('$localPassthrough', $config['local_passthrough']);
         $services->alias(FolioAcquisition::class, FolioDownloader::class);
@@ -67,6 +83,9 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
     public function prependExtension(ContainerConfigurator $container, ContainerBuilder $builder): void
     {
         parent::prependExtension($container, $builder);
+        if ($builder->hasExtension('ux_icons')) {
+            $builder->prependExtensionConfig('ux_icons', ['aliases' => ['harvest' => 'tabler:database-import']]);
+        }
         $configs = $builder->getExtensionConfig('survos_harvest');
         $config = (new Processor())->processConfiguration($this->getContainerExtension()->getConfiguration($configs, $builder), $configs);
         $builder->setParameter('survos_harvest.default_server', 'https://harvest.survos.com');

@@ -103,12 +103,33 @@ Inject `Survos\HarvestBundle\Catalog\HarvestCatalog` and call
 This read makes no HTTP call. Migrate and run an initial sync before switching
 application pages to the local catalog.
 
+## Administration UI
+
+Visit `/admin/harvest/` as a user with `ROLE_ADMIN`. The local catalog, dataset
+details, artifact revisions and folio-set membership are read from the app DB.
+**Preview sync** and **Sync now** use the same service and lock as the console
+command. Both actions require a CSRF-protected POST. Sync runs within the web
+request; use the console for acquisitions that exceed your web request timeout.
+
+**Search Harvest API** queries Harvest from the application server using its
+configured read token, without sending that token to the browser or requiring a
+Harvest login. Search filters the paginated remote catalog by text and provider;
+the catalog is cached for five minutes, with an explicit refresh. Results include
+dataset keys for adding to folio-set configuration. Searching does not change
+membership or download files. **Help & folio sets** explains selections,
+track-only sets, sync, setup and the application's current selection rules.
+
+With Tabler installed, a Harvest menu is added to `ADMIN_NAVBAR_MENU` for admins.
+Other layouts can link to the `survos_harvest_admin` route, as Rutado's Settings
+page does. Templates extend `base.html.twig`; override `base_layout` if needed.
+Kit's `routes_enabled` and `route_prefix` options control route registration;
+set `admin_navbar_menu: false` to omit the menu entry.
+
 ## Migration status
 
-Rutado is the first consumer integration. Its local development installation uses
-`../mono/link` while this implementation awaits a coordinated package release.
-The previously published `2.33.0` skeleton does not contain these services.
-Do not deploy a consumer until its lockfile resolves a release containing them.
+Rutado is the first consumer integration. Published `2.37.1` was validated there
+with local migrations, a dry run and a real sync. The administration UI described
+above is included starting with `2.37.2`.
 
 Existing dataset-bundle sync services and folio-bundle configuration remain
 available for unmigrated consumers. Do not enable the old

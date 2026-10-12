@@ -1,0 +1,16 @@
+{% extends '@SurvosHarvest/admin/layout.html.twig' %}
+{% block harvest_content %}
+<section class="h-card"><h2>Find folios in Harvest</h2><p class="h-muted">Search the authenticated Harvest catalog from here. Browsing does not change your sets or download files.</p>
+<form method="get" class="h-filters"><label class="h-query">Search available folios<input type="search" name="q" value="{{ query }}" maxlength="200" placeholder="Title, place, provider or tag"></label><label>Provider<select name="provider"><option value="">All providers</option>{% if results %}{% for item in results.providers %}<option value="{{ item }}" {{ provider == item ? 'selected' }}>{{ item }}</option>{% endfor %}{% endif %}</select></label><button type="submit">Search Harvest</button></form>
+{% if error %}<div class="h-notice h-error" role="alert">{{ error }}</div>{% endif %}
+{% if results %}
+<div class="h-toolbar"><p class="h-muted">{{ results.total|number_format }} folio variants · catalog fetched {{ results.fetchedAt|date('H:i T') }}</p><a href="{{ path('survos_harvest_search', {q: query, provider: provider, refresh: 1}) }}">Refresh from Harvest</a></div>
+{% for entry in results.items %}
+<article class="h-result"><div class="h-toolbar"><h2>{{ entry.title }}</h2><span class="h-pill">{{ entry.provider }}</span></div><p><code>{{ entry.datasetKey }}</code>{% if entry.locale %} · {{ entry.locale }}{% endif %} · {{ entry.rowCount|number_format }} rows</p>{% if entry.description %}<p class="h-muted">{{ entry.description|slice(0, 260) }}{{ entry.description|length > 260 ? '…' }}</p>{% endif %}{% if entry.tags %}<p class="h-muted">{{ entry.tags|join(' · ') }}</p>{% endif %}<small>{{ entry.compressed and entry.downloadUrl ? 'Archive available for acquisition' : 'Cataloged; no compressed archive published' }}</small>
+<details><summary>Include this folio in a set</summary><p>Add this exact key under the set's <code>criteria.folios</code>, then preview and sync.</p><pre>folios: [{{ entry.datasetKey|json_encode }}]</pre><a href="{{ path('survos_harvest_help') }}">See the complete configuration example →</a></details>
+</article>
+{% else %}<div class="h-empty">No folios match. Try a shorter query or another provider.</div>{% endfor %}
+<div class="h-pagination"><span>Page {{ results.page }} of {{ results.pages }}</span><div class="h-actions">{% if results.page > 1 %}<a class="h-button h-secondary" href="{{ path('survos_harvest_search', {q: query, provider: provider, page: results.page - 1}) }}">Previous</a>{% endif %}{% if results.page < results.pages %}<a class="h-button h-secondary" href="{{ path('survos_harvest_search', {q: query, provider: provider, page: results.page + 1}) }}">Next</a>{% endif %}</div></div>
+{% endif %}
+</section>
+{% endblock %}
