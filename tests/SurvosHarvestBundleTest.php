@@ -10,7 +10,19 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 
 final class SurvosHarvestBundleTest extends TestCase
 {
-    public function testScaffoldCompilesWithoutApplicationConfiguration(): void
+    public function testKitRegistersOnlyMappingsWithoutADatabaseConnection(): void
+    {
+        $bundle = new SurvosHarvestBundle();
+        $container = new ContainerBuilder();
+        $bundle->getContainerExtension()->prepend($container);
+        $config = $container->getExtensionConfig('doctrine');
+        self::assertCount(1, $config);
+        self::assertArrayNotHasKey('dbal', $config[0]);
+        self::assertSame('Survos\\HarvestBundle\\Entity', $config[0]['orm']['mappings']['SurvosHarvestBundle']['prefix']);
+        self::assertDirectoryExists($config[0]['orm']['mappings']['SurvosHarvestBundle']['dir']);
+    }
+
+    public function testBundleCompilesWithoutApplicationConfiguration(): void
     {
         $bundle = new SurvosHarvestBundle();
         $extension = $bundle->getContainerExtension();

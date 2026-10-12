@@ -1,62 +1,133 @@
 # Harvest Bundle
 
-Symfony integration for applications consuming folios from the Harvest server.
+Consume Harvest's catalog and selected folios over HTTP. Persist the catalog in
+**your application's existing database**, without installing dataset-bundle or
+connecting to Harvest's database.
 
-## Publication scaffold
+## Ownership and storage
 
-This package currently provides a bootable bundle and the `survos_harvest`
-configuration namespace. It does **not** yet provide `harvest:sync`, catalog
-services, folio sets, or checkpoint storage. Keep existing consumer dependencies
-and configuration until the extraction is released.
+- `survos/dataset-bundle` owns the producer registry and pipeline in Harvest.
+- `survos/harvest-bundle` owns the consumer's catalog, selection and sync checkpoint.
+- `survos/folio-bundle` opens, reads, archives, restores and downloads individual
+  folio files. Their contents remain in those files, not in the application DB.
 
-The intended boundary is:
+The bundle extends `AbstractSurvosBundle` and uses kit's `HasDoctrineEntities`.
+The four entities in `src/Entity` auto-register with the default entity manager:
 
-- `survos/dataset-bundle`: the producer registry used by the Harvest application.
-- `survos/harvest-bundle`: consumer synchronization, catalog, selection and scheduling.
-- `survos/folio-bundle`: opening, reading, archiving, restoring, inflating,
-  pulling one folio entry, and browsing folios.
+| Entity | Table | Purpose |
+| --- | --- | --- |
+| `Dataset` | `harvest_dataset` | Remote identity, source, provider and public metadata snapshot |
+| `Artifact` | `harvest_artifact` | Each artifact type/code, remote revision, URL and last locally acquired revision |
+| `SetMembership` | `harvest_set_membership` | Recorded dataset membership and download policy per named set |
+| `HarvestSyncCheckpoint` | `harvest_sync_checkpoint` | Last successfully applied feed cursor and dataset map |
 
-Rutado, ZM, Ink and Fotostory will migrate in a subsequent change. The existing
-Harvest attribute and metadata classes remain available but are not registered
-as services by this scaffold.
+No connection or entity manager is created. The application owns its schema
+migrations. Producer pipeline fields are not modeled here; arbitrary artifact
+types are tracked, while file acquisition currently supports folios only.
 
-## Installation
+## Install and configure
 
-Requires PHP 8.5+, Symfony 8.1+ and `survos/kit-bundle`.
-After the package is published:
+Requires PHP 8.5+, Symfony 8.1+, Doctrine ORM, kit-bundle and folio-bundle.
+API Platform and dataset-bundle are not dependencies.
 
 ```bash
 composer require survos/harvest-bundle
 ```
 
-Symfony Flex discovers `Survos\HarvestBundle\SurvosHarvestBundle`. If Flex is
-not used, register it and `Survos\Kit\SurvosKitBundle` in `config/bundles.php`.
-No application configuration file is needed for this scaffold. Future options
-will be defined in `SurvosHarvestBundle::configure()` and configured by consumers
-in their own `config/packages/survos_harvest.yaml`.
+Flex registers `Survos\HarvestBundle\SurvosHarvestBundle`; without Flex,
+register it and its installed dependency bundles in `config/bundles.php`.
+Options are defined in `SurvosHarvestBundle::configure()`. Configure selections
+in the **application's** `config/packages/survos_harvest.yaml`:
 
-No API Platform dependency is required.
+```yaml
+survos_harvest:
+    folio_sets:
+        tours:
+            label: Tours
+            download: true
+            criteria:
+                provider: [curatescape]
+                minRows: 1
+```
 
-## Validation
+Set `download: false` to record membership and metadata without acquiring files.
+When sets overlap, an artifact is downloaded if any matching set requests it.
+Supported criteria are `provider`, `tags` (any), `tagsAll`, `contentType`,
+`minRows` and explicit `folios` (dataset keys). Metadata criteria intersect;
+explicit keys additionally select those datasets. A missing explicit key fails
+loudly. Empty criteria select nothing. All remote datasets and artifact metadata
+are stored in the local catalog; sets determine membership and file acquisition.
 
-In a standalone package checkout:
+The default server is `https://harvest.survos.com`. An absent or empty
+`HARVEST_SERVER` uses that default. Override it in `.env.local` for development:
+
+```dotenv
+HARVEST_SERVER=https://127.0.0.1:8011
+HARVEST_READ_TOKEN=your-read-token
+```
+
+The metadata API currently requires that token. You can also configure `server`
+and `read_token` directly. The bundle configures folio-bundle's dataset API and
+server for downloads; remove conflicting legacy `survos_folio.folio_server` or
+`dataset_api` settings. `local_passthrough: true` uses an existing shared folio
+volume; it never shares a registry database. `lock_factory` defaults to
+`lock.factory` and must use a store shared by sync workers for this application.
+
+## Preview, migrate and sync
 
 ```bash
+bin/console harvest:sync --dry
+bin/console doctrine:migrations:diff
+# Review the generated migration, then apply it:
+bin/console doctrine:migrations:migrate
+bin/console harvest:sync
+bin/console harvest:sync:status
+```
+
+`--dry` reads Harvest and any existing local checkpoint, evaluates sets and prints
+the proposed selection. It writes no catalog, checkpoint, membership, lock or
+folio files and performs no downloads. With no Harvest tables, it previews an
+initial full sync without creating schema. `--full` forces complete reconciliation.
+
+A real sync locks, fetches the current catalog/change feed, acquires selected
+folios, then commits dataset metadata, artifacts, membership and checkpoint in
+one database transaction. A failed download or database write leaves the cursor
+unchanged. Downloads are outside the DB transaction and may already exist after
+a later failure; retries are idempotent. Removed remote records/membership are
+reconciled, but local folio files are never deleted automatically. Uncompressed
+artifacts remain tracked; acquisition checks for an existing local file until
+Harvest publishes an archive.
+
+Inject `Survos\HarvestBundle\Catalog\HarvestCatalog` and call
+`members('tours')` to get `FolioCatalogEntry` objects from recorded membership.
+This read makes no HTTP call. Migrate and run an initial sync before switching
+application pages to the local catalog.
+
+## Migration status
+
+Rutado is the first consumer integration. Its local development installation uses
+`../mono/link` while this implementation awaits a coordinated package release.
+The previously published `2.33.0` skeleton does not contain these services.
+Do not deploy a consumer until its lockfile resolves a release containing them.
+
+Existing dataset-bundle sync services and folio-bundle configuration remain
+available for unmigrated consumers. Do not enable the old
+`survos_dataset.harvest_sync` alongside this bundle: both expose `harvest:sync`.
+The remaining consumer migrations, compatibility forwarding and automatic
+scheduler integration are follow-up work. The old `Harvest` attribute and
+metadata registry are deprecated scaffold classes, not the persistent catalog.
+
+## Validation and release
+
+```bash
+# In mono
+vendor/bin/phpunit -c bu/harvest-bundle/phpunit.xml.dist
+composer validate --strict bu/harvest-bundle/composer.json
+# Standalone package checkout
 composer install
 composer test
 ```
 
-From the monorepo:
-
-```bash
-vendor/bin/phpunit -c bu/harvest-bundle/phpunit.xml.dist
-composer validate --strict bu/harvest-bundle/composer.json
-```
-
-## Publication
-
-The source is maintained in `survos/mono`, under `bu/harvest-bundle`, already
-listed in `.github/workflows/split.yml`. After an approved merge to `main`, the
-split workflow updates `https://github.com/survos/harvest-bundle`. Submit that
-repository to Packagist. Coordinate any release tag with the release owner;
-do not replace published tags.
+Source lives in `survos/mono`, under `bu/harvest-bundle`, already registered in
+`.github/workflows/split.yml`. Coordinate releases with the release owner;
+never replace a published tag.

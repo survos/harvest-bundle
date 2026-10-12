@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Survos\HarvestBundle\Metadata;
 
 /** Immutable metadata extracted from #[Harvest] attributes. */
+/** @deprecated Legacy provider metadata scaffold; use the persistent Harvest catalog entities. */
 final class HarvestMetadata
 {
     /**

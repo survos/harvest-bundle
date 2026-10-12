@@ -5,6 +5,7 @@ namespace Survos\HarvestBundle\Service;
 
 use Survos\HarvestBundle\Metadata\HarvestMetadata;
 
+/** @deprecated Legacy provider metadata scaffold; use the persistent Harvest catalog entities. */
 final class HarvestMetadataRegistry
 {
     /** @var array<string,HarvestMetadata> */

@@ -19,6 +19,7 @@ namespace Survos\HarvestBundle\Attribute;
  * )]
  */
 #[\Attribute(\Attribute::TARGET_CLASS)]
+/** @deprecated Legacy provider metadata scaffold; use the persistent Harvest catalog entities. */
 final class Harvest
 {
     /**
