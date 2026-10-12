@@ -7,6 +7,8 @@ namespace Survos\HarvestBundle\Sync;
 use Survos\FolioBundle\Catalog\DatasetField as Field;
 use Survos\FolioBundle\Catalog\DatasetPublicationClient;
 use Survos\HarvestBundle\Catalog\HarvestCatalog;
+use Survos\HarvestBundle\Event\HarvestSyncedEvent;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
@@ -21,6 +23,7 @@ final readonly class HarvestSync
         private Selection $selection,
         private FolioAcquisition $acquisition,
         private LockFactory $locks,
+        private ?EventDispatcherInterface $events = null,
     ) {}
 
     #[AsCommand('harvest:sync', 'Synchronize Harvest metadata and selected folios into this app')]
@@ -64,7 +67,9 @@ final readonly class HarvestSync
             if ($dry) {
                 $io->success('Dry run complete. No database, checkpoint, catalog cache or folio files changed.');
             } else {
-                $this->catalog->commit($plan, $acquired);
+                $this->catalog->commit($plan, $acquired, function () use ($io, $plan): void {
+                    $this->events?->dispatch(new HarvestSyncedEvent($io, $plan));
+                });
                 $io->success('Harvest catalog, set membership and checkpoint committed to the application database.');
             }
 

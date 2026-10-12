@@ -7,6 +7,9 @@ namespace Survos\HarvestBundle;
 use Doctrine\ORM\EntityManagerInterface;
 use Survos\FolioBundle\Catalog\DatasetPublicationClient;
 use Survos\HarvestBundle\Catalog\HarvestCatalog;
+use Survos\HarvestBundle\Catalog\RecordedMembership;
+use Survos\FolioBundle\Set\RecordedMembershipProvider;
+use Survos\HarvestBundle\Schedule\HarvestSchedule;
 use Survos\HarvestBundle\Admin\CatalogBrowser;
 use Survos\HarvestBundle\Admin\HarvestSearch;
 use Survos\HarvestBundle\Controller\HarvestAdminController;
@@ -43,9 +46,17 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
             ->scalarNode('server')->defaultValue('%env(default:survos_harvest.default_server:HARVEST_SERVER)%')->cannotBeEmpty()->end()
             ->scalarNode('read_token')->defaultValue('%env(default:survos_harvest.empty_token:HARVEST_READ_TOKEN)%')->end()
             ->scalarNode('lock_factory')->defaultValue('lock.factory')->end()
+            ->integerNode('catalog_ttl')->min(0)->defaultValue(300)->end()
+            ->booleanNode('schedule_enabled')->defaultTrue()->end()
+            ->arrayNode('sites')->normalizeKeys(false)->useAttributeAsKey('code')->arrayPrototype()->children()
+                ->arrayNode('hosts')->isRequired()->requiresAtLeastOneElement()->scalarPrototype()->end()->end()
+                ->arrayNode('sets')->isRequired()->requiresAtLeastOneElement()->scalarPrototype()->end()->end()
+                ->booleanNode('restrict')->defaultFalse()->end()
+            ->end()->end()->end()
             ->booleanNode('local_passthrough')->defaultFalse()->end()
             ->arrayNode('folio_sets')->normalizeKeys(false)->useAttributeAsKey('code')->arrayPrototype()->children()
                 ->scalarNode('label')->defaultNull()->end()
+                ->scalarNode('core')->defaultValue('obj')->end()
                 ->booleanNode('download')->info('False records membership without acquiring folio files.')->defaultTrue()->end()
                 ->arrayNode('criteria')->isRequired()->children()
                     ->arrayNode('provider')->scalarPrototype()->end()->end()
@@ -64,6 +75,11 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
         parent::loadExtension($config, $container, $builder);
         $services = $container->services()->defaults()->autowire()->autoconfigure();
         $services->set(HarvestCatalog::class)->arg('$em', new Reference(EntityManagerInterface::class));
+        $services->set(RecordedMembership::class);
+        $services->alias(RecordedMembershipProvider::class, RecordedMembership::class);
+        if ($config['schedule_enabled']) {
+            $services->set(HarvestSchedule::class)->arg('$cache', new Reference('cache.app'));
+        }
         $services->set(CatalogBrowser::class);
         $services->set(HarvestSearch::class)->arg('$cache', new Reference('cache.app'));
         $services->set(HarvestAdminController::class)->args(['$sets' => $config['folio_sets'], '$baseLayout' => $config['base_layout']]);
@@ -86,10 +102,14 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
         if ($builder->hasExtension('ux_icons')) {
             $builder->prependExtensionConfig('ux_icons', ['aliases' => ['harvest' => 'tabler:database-import']]);
         }
-        $configs = $builder->getExtensionConfig('survos_harvest');
-        $config = (new Processor())->processConfiguration($this->getContainerExtension()->getConfiguration($configs, $builder), $configs);
         $builder->setParameter('survos_harvest.default_server', 'https://harvest.survos.com');
         $builder->setParameter('survos_harvest.empty_token', '');
+        $bag = $builder->getParameterBag();
+        if ($bag instanceof \Symfony\Component\DependencyInjection\ParameterBag\EnvPlaceholderParameterBag) {
+            \Symfony\Component\Config\Definition\BaseNode::setPlaceholderUniquePrefix($bag->getEnvPlaceholderUniquePrefix());
+        }
+        $configs = $bag->resolveValue($builder->getExtensionConfig('survos_harvest'));
+        $config = (new Processor())->processConfiguration($this->getContainerExtension()->getConfiguration($configs, $builder), $configs);
         foreach (['server', 'read_token', 'local_passthrough'] as $key) {
             $builder->setParameter('survos_harvest.'.$key, $config[$key]);
         }
@@ -97,6 +117,9 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
             'folio_server' => '%survos_harvest.server%',
             'dataset_api' => ['enabled' => true, 'server' => '%survos_harvest.server%', 'token' => '%survos_harvest.read_token%'],
             'local_passthrough' => '%survos_harvest.local_passthrough%',
+            'catalog_ttl' => $config['catalog_ttl'],
+            'folio_sets' => array_map(static function (array $set): array { unset($set['download']); return $set; }, $config['folio_sets']),
+            'sites' => $config['sites'],
         ]);
     }
 }

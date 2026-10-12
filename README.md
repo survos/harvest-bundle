@@ -134,8 +134,7 @@ above is included starting with `2.37.2`.
 Existing dataset-bundle sync services and folio-bundle configuration remain
 available for unmigrated consumers. Do not enable the old
 `survos_dataset.harvest_sync` alongside this bundle: both expose `harvest:sync`.
-The remaining consumer migrations, compatibility forwarding and automatic
-scheduler integration are follow-up work. The old `Harvest` attribute and
+Remaining consumers can migrate independently; legacy dataset-bundle sync must be disabled first. The old `Harvest` attribute and
 metadata registry are deprecated scaffold classes, not the persistent catalog.
 
 ## Validation and release
@@ -152,3 +151,32 @@ composer test
 Source lives in `survos/mono`, under `bu/harvest-bundle`, already registered in
 `.github/workflows/split.yml`. Coordinate releases with the release owner;
 never replace a published tag.
+
+## Scheduled sync and application projections (next patch)
+
+The bundle registers Symfony's `harvest` schedule by default. It runs `harvest:sync`
+every five minutes, retaining its schedule state and replaying only the last missed
+run. Set `schedule_enabled: false` to opt out. Run a persistent worker:
+
+```bash
+bin/console messenger:consume scheduler_harvest --time-limit=3600 --memory-limit=256M
+bin/console debug:scheduler harvest
+```
+
+For Dokku, declare that command as a Procfile process and scale it to one worker;
+a schedule definition alone does not start a background process. Use a shared
+Symfony Lock store across web, scheduler and CLI instances.
+
+`survos_harvest.sites` owns the host-to-set mappings, and each set can specify its
+presentation `core` (default `obj`). These are forwarded to folio-bundle's existing
+presentation services for compatibility. Their recorded membership is read from the
+application database through `RecordedMembershipProvider`, with no file-cache or
+HTTP fallback. `catalog_ttl` also belongs under `survos_harvest`.
+
+`Survos\HarvestBundle\Event\HarvestSyncedEvent` is dispatched after membership
+is flushed, inside the transaction and before advancing the checkpoint. Listeners
+can read the new membership and update app-owned projections using the default
+entity manager; throwing rolls back both projections and the catalog/checkpoint.
+Listeners run on every real sync so configuration or local-file changes are applied
+without requiring a remote revision change. Dry runs do not dispatch the event.
+Keep irreversible external effects out of these listeners.

@@ -176,13 +176,35 @@ final class HarvestSyncTest extends TestCase
         self::assertSame([], $this->requests);
     }
 
-    private function sync(FolioAcquisition $acquire, bool $download = true): HarvestSync
+    public function testApplicationProjectionSeesMembershipAndFailureRollsBackEverything(): void
+    {
+        $this->installSchema();
+        $events = new \Symfony\Component\EventDispatcher\EventDispatcher();
+        $events->addListener(\Survos\HarvestBundle\Event\HarvestSyncedEvent::class, function (): void {
+            self::assertCount(1, $this->catalog->members('tours'));
+            self::assertSame('curatescape/a', $this->catalog->find('curatescape/a')->datasetKey);
+            throw new \RuntimeException('Projection failed');
+        });
+        self::assertSame(1, $this->sync($this->createStub(FolioAcquisition::class), false, $events)->sync($this->io()));
+        foreach (['harvest_dataset', 'harvest_artifact', 'harvest_set_membership', 'harvest_sync_checkpoint'] as $table) {
+            self::assertSame(0, (int) $this->em->getConnection()->fetchOne('SELECT COUNT(*) FROM '.$table));
+        }
+    }
+
+    public function testDryRunNeverDispatchesApplicationProjection(): void
+    {
+        $events = $this->createMock(\Symfony\Contracts\EventDispatcher\EventDispatcherInterface::class);
+        $events->expects(self::never())->method('dispatch');
+        self::assertSame(0, $this->sync($this->createStub(FolioAcquisition::class), false, $events)->sync($this->io(), dry: true));
+    }
+
+    private function sync(FolioAcquisition $acquire, bool $download = true, ?\Symfony\Contracts\EventDispatcher\EventDispatcherInterface $events = null): HarvestSync
     {
         $selection = new Selection(['tours' => ['download' => $download, 'criteria' => [
             Field::PROVIDER => ['curatescape'], PropertyKey::TAGS => [], 'tagsAll' => [],
             PropertyKey::CONTENT_TYPE => [], Field::FOLIOS => [], 'minRows' => 1,
         ]]]);
-        return new HarvestSync($this->client, $this->catalog, $selection, $acquire, new LockFactory(new InMemoryStore()));
+        return new HarvestSync($this->client, $this->catalog, $selection, $acquire, new LockFactory(new InMemoryStore()), $events);
     }
 
     private function installSchema(): void

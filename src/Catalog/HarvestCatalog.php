@@ -68,10 +68,25 @@ final readonly class HarvestCatalog
         return $entries;
     }
 
-    /** Persist metadata, membership, acquisition receipts and cursor in one transaction. */
-    public function commit(SyncPlan $plan, array $acquired): void
+    public function find(string $key): ?FolioCatalogEntry
     {
-        $this->em->wrapInTransaction(function () use ($plan, $acquired): void {
+        $dataset = $this->em->find(Dataset::class, $key);
+        if ($dataset === null) { return null; }
+        foreach (FolioCatalogEntry::fromDataset($dataset->payload, $this->client) as $entry) {
+            if ($entry->locale === null) { return $entry; }
+        }
+        return null;
+    }
+
+    public function isStale(): bool
+    {
+        return !$this->schemaReady() || $this->checkpoint() === null;
+    }
+
+    /** Persist metadata, membership, acquisition receipts and cursor in one transaction. */
+    public function commit(SyncPlan $plan, array $acquired, ?\Closure $afterMembership = null): void
+    {
+        $this->em->wrapInTransaction(function () use ($plan, $acquired, $afterMembership): void {
             $now = new \DateTimeImmutable();
             $datasets = $artifacts = $members = [];
             foreach ($plan->checkpoint[Field::ITEMS] as $key => $payload) {
@@ -122,6 +137,8 @@ final readonly class HarvestCatalog
             foreach ($this->em->getRepository(Dataset::class)->findAll() as $row) {
                 if (!isset($datasets[$row->datasetKey])) { $this->em->remove($row); }
             }
+            $this->em->flush();
+            $afterMembership?->__invoke();
             $checkpoint = $this->em->find(HarvestSyncCheckpoint::class, 'harvest') ?? new HarvestSyncCheckpoint();
             $checkpoint->checkpoint = $plan->checkpoint;
             $checkpoint->checkpoint[Field::LAST_SUCCESSFUL_SYNC_AT] = $now->format(DATE_ATOM);
