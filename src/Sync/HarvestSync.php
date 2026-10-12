@@ -20,7 +20,7 @@ final readonly class HarvestSync
     public function __construct(
         private DatasetPublicationClient $client,
         private HarvestCatalog $catalog,
-        private Selection $selection,
+        private HarvestSelection $selection,
         private FolioAcquisition $acquisition,
         private LockFactory $locks,
         private ?EventDispatcherInterface $events = null,

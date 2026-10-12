@@ -180,3 +180,13 @@ entity manager; throwing rolls back both projections and the catalog/checkpoint.
 Listeners run on every real sync so configuration or local-file changes are applied
 without requiring a remote revision change. Dry runs do not dispatch the event.
 Keep irreversible external effects out of these listeners.
+
+## Application-owned selection
+
+Apps whose database determines which folios to acquire can implement
+`Survos\HarvestBundle\Sync\HarvestSelection` and alias that interface to their
+service. `plan()` receives the complete reconciled checkpoint and returns a
+`SyncPlan` containing selected artifacts, download flags and set membership.
+Read application selection on every call, retain the complete checkpoint, and
+keep planning free of writes/downloads so `harvest:sync --dry` stays safe.
+The default implementation remains the configured `folio_sets` selector.

@@ -15,7 +15,7 @@ final class SetMembership
     public readonly string $id;
 
     public function __construct(
-        #[ORM\Column(length: 128)] public readonly string $setCode,
+        #[ORM\Column(name: 'set_code', length: 128)] public readonly string $setCode,
         #[ORM\ManyToOne(targetEntity: Dataset::class)]
         #[ORM\JoinColumn(name: 'dataset_key', referencedColumnName: 'dataset_key', nullable: false, onDelete: 'CASCADE')]
         public readonly Dataset $dataset,

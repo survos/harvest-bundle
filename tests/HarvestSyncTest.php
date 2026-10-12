@@ -23,6 +23,8 @@ use Survos\HarvestBundle\Entity\HarvestSyncCheckpoint;
 use Survos\HarvestBundle\Entity\SetMembership;
 use Survos\HarvestBundle\Sync\FolioAcquisition;
 use Survos\HarvestBundle\Sync\HarvestSync;
+use Survos\HarvestBundle\Sync\HarvestSelection;
+use Survos\HarvestBundle\Sync\SyncPlan;
 use Survos\HarvestBundle\Sync\Selection;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -78,6 +80,20 @@ final class HarvestSyncTest extends TestCase
         self::assertSame('epoch:1', $this->catalog->checkpoint()[Field::CURSOR]);
         self::assertCount(1, $this->catalog->acquiredRevisions());
         self::assertCount(3, $this->requests, 'Reading membership makes no HTTP requests');
+    }
+
+    public function testMappingsDoNotDependOnApplicationNamingStrategy(): void
+    {
+        $config = ORMSetup::createAttributeMetadataConfiguration([dirname(__DIR__).'/src/Entity'], true);
+        $config->enableNativeLazyObjects(true);
+        $em = new EntityManager(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]), $config);
+        try {
+            self::assertSame([], (new SchemaValidator($em))->validateMapping());
+            (new SchemaTool($em))->createSchema($em->getMetadataFactory()->getAllMetadata());
+            self::assertTrue($em->getConnection()->createSchemaManager()->introspectTable('harvest_dataset')->hasColumn('dataset_key'));
+        } finally {
+            $em->close();
+        }
     }
 
     public function testDryRunWithoutSchemaDoesNotCreateTablesOrDownload(): void
@@ -196,6 +212,22 @@ final class HarvestSyncTest extends TestCase
         $events = $this->createMock(\Symfony\Contracts\EventDispatcher\EventDispatcherInterface::class);
         $events->expects(self::never())->method('dispatch');
         self::assertSame(0, $this->sync($this->createStub(FolioAcquisition::class), false, $events)->sync($this->io(), dry: true));
+    }
+
+    public function testApplicationSelectionRunsAgainForEachSyncWithoutChangingRemoteCatalog(): void
+    {
+        $this->installSchema();
+        $selection = $this->createMock(HarvestSelection::class);
+        $selection->expects(self::exactly(2))->method('plan')->willReturnCallback(
+            static fn (array $checkpoint, DatasetPublicationClient $client): SyncPlan => new SyncPlan($checkpoint, [], [], []),
+        );
+        $acquisition = $this->createMock(FolioAcquisition::class);
+        $acquisition->expects(self::never())->method('acquire');
+        $sync = new HarvestSync($this->client, $this->catalog, $selection, $acquisition, new LockFactory(new InMemoryStore()));
+        self::assertSame(0, $sync->sync($this->io(), full: true));
+        self::assertSame(0, $sync->sync($this->io(), full: true));
+        self::assertCount(2, $this->em->getRepository(Dataset::class)->findAll());
+        self::assertSame([], $this->catalog->acquiredRevisions());
     }
 
     private function sync(FolioAcquisition $acquire, bool $download = true, ?\Symfony\Contracts\EventDispatcher\EventDispatcherInterface $events = null): HarvestSync

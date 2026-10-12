@@ -19,10 +19,10 @@ final class Artifact
     #[ORM\Column(type: Types::TEXT)]
     public string $revision;
 
-    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[ORM\Column(name: 'acquired_revision', type: Types::TEXT, nullable: true)]
     public ?string $acquiredRevision = null;
 
-    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[ORM\Column(name: 'download_url', type: Types::TEXT, nullable: true)]
     public ?string $downloadUrl = null;
 
     #[ORM\Column(type: Types::JSON)]

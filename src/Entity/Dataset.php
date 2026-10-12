@@ -27,10 +27,10 @@ final class Dataset
     #[ORM\Column(type: Types::JSON)]
     public array $payload;
 
-    #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
+    #[ORM\Column(name: 'synced_at', type: Types::DATETIME_IMMUTABLE)]
     public \DateTimeImmutable $syncedAt;
 
     public function __construct(
-        #[ORM\Id, ORM\Column(length: 255)] public readonly string $datasetKey,
+        #[ORM\Id, ORM\Column(name: 'dataset_key', length: 255)] public readonly string $datasetKey,
     ) {}
 }

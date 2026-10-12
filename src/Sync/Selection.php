@@ -11,7 +11,7 @@ use Survos\FolioBundle\Catalog\FolioCatalogEntry;
 use Survos\FolioBundle\Set\FolioSetResolver;
 use Survos\HarvestBundle\Entity\Artifact;
 
-final readonly class Selection
+final readonly class Selection implements HarvestSelection
 {
     public function __construct(private array $sets) {}
 

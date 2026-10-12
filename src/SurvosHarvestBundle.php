@@ -19,6 +19,7 @@ use Survos\HarvestBundle\Sync\FolioAcquisition;
 use Survos\HarvestBundle\Sync\FolioDownloader;
 use Survos\HarvestBundle\Sync\HarvestSync;
 use Survos\HarvestBundle\Sync\Selection;
+use Survos\HarvestBundle\Sync\HarvestSelection;
 use Survos\Kit\AbstractSurvosBundle;
 use Survos\Kit\SurvosKitBundle;
 use Survos\Kit\Traits\HasDoctrineEntities;
@@ -87,6 +88,7 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
             $services->set(HarvestMenuSubscriber::class);
         }
         $services->set(Selection::class)->arg('$sets', $config['folio_sets']);
+        $services->alias(HarvestSelection::class, Selection::class);
         $services->set(FolioDownloader::class)->arg('$localPassthrough', $config['local_passthrough']);
         $services->alias(FolioAcquisition::class, FolioDownloader::class);
         $services->set(HarvestSync::class)->arg('$locks', new Reference($config['lock_factory']));
