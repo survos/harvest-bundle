@@ -15,7 +15,9 @@ use Symfony\Contracts\Cache\CacheInterface;
 #[AsSchedule('harvest')]
 final readonly class HarvestSchedule implements ScheduleProviderInterface
 {
-    public function __construct(private CacheInterface $cache, private string $interval = '2 minutes') {}
+    public function __construct(private CacheInterface $cache, private string $interval = '2 minutes')
+    {
+    }
 
     public function getSchedule(): Schedule
     {

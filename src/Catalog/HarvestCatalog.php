@@ -19,7 +19,9 @@ use Survos\HarvestBundle\Sync\SyncPlan;
 /** Queries only the consuming application's database; never Harvest's database. */
 final readonly class HarvestCatalog
 {
-    public function __construct(private EntityManagerInterface $em, private DatasetPublicationClient $client) {}
+    public function __construct(private EntityManagerInterface $em, private DatasetPublicationClient $client)
+    {
+    }
 
     public function schemaReady(): bool
     {
@@ -46,7 +48,7 @@ final readonly class HarvestCatalog
     public function checkpoint(): ?array
     {
         $row = $this->em->find(HarvestSyncCheckpoint::class, 'harvest');
-        if ($row === null) {
+        if (null === $row) {
             return null;
         }
         $this->em->refresh($row);
@@ -61,7 +63,7 @@ final readonly class HarvestCatalog
         $revisions = [];
         foreach ($this->em->getRepository(Artifact::class)->findAll() as $artifact) {
             $this->em->refresh($artifact);
-            if ($artifact->acquiredRevision !== null && $artifact->dataset->source === $source) {
+            if (null !== $artifact->acquiredRevision && $artifact->dataset->source === $source) {
                 $revisions[$artifact->id] = $artifact->acquiredRevision;
             }
         }
@@ -80,7 +82,7 @@ final readonly class HarvestCatalog
         $codes = [];
         $artifacts = $this->em->getRepository(Artifact::class)->findBy(['type' => [Field::FOLIO_TYPE, Field::FOLIO_ARCHIVE_TYPE]]);
         foreach ($artifacts as $artifact) {
-            if ($artifact->acquiredRevision !== null && ($artifact->payload[Field::CORE_COUNTS][$core] ?? 0) > 0) {
+            if (null !== $artifact->acquiredRevision && ($artifact->payload[Field::CORE_COUNTS][$core] ?? 0) > 0) {
                 $codes[] = $artifact->dataset->datasetKey;
             }
         }
@@ -106,16 +108,21 @@ final readonly class HarvestCatalog
     public function find(string $key): ?FolioCatalogEntry
     {
         $dataset = $this->em->find(Dataset::class, $key);
-        if ($dataset === null) { return null; }
-        foreach (FolioCatalogEntry::fromDataset($dataset->payload, $this->client) as $entry) {
-            if ($entry->locale === null) { return $entry; }
+        if (null === $dataset) {
+            return null;
         }
+        foreach (FolioCatalogEntry::fromDataset($dataset->payload, $this->client) as $entry) {
+            if (null === $entry->locale) {
+                return $entry;
+            }
+        }
+
         return null;
     }
 
     public function isStale(): bool
     {
-        return !$this->schemaReady() || $this->checkpoint() === null;
+        return !$this->schemaReady() || null === $this->checkpoint();
     }
 
     /**
@@ -157,7 +164,7 @@ final readonly class HarvestCatalog
                 $dataset->locales = array_values(array_unique(array_map(
                     static fn (FolioCatalogEntry $entry): string => (string) $entry->locale,
                     array_filter(FolioCatalogEntry::fromDataset($payload, $this->client),
-                        static fn (FolioCatalogEntry $entry): bool => $entry->locale !== null),
+                        static fn (FolioCatalogEntry $entry): bool => null !== $entry->locale),
                 )));
                 $dataset->syncedAt = $now;
                 $this->em->persist($dataset);
@@ -166,7 +173,7 @@ final readonly class HarvestCatalog
                     $id = Artifact::identity($key, $remote[ItemField::TYPE], $remote[Field::CODE]);
                     $artifact = $this->em->find(Artifact::class, $id) ?? new Artifact($dataset, $remote[ItemField::TYPE], $remote[Field::CODE]);
                     $artifact->revision = $remote[Field::REVISION];
-                    $artifact->downloadUrl = $remote[Field::DOWNLOAD_URL] === null ? null : $this->client->downloadUrl($remote[Field::DOWNLOAD_URL]);
+                    $artifact->downloadUrl = null === $remote[Field::DOWNLOAD_URL] ? null : $this->client->downloadUrl($remote[Field::DOWNLOAD_URL]);
                     $artifact->payload = $remote;
                     if ($sourceChanged) {
                         $artifact->acquiredRevision = null;
@@ -188,13 +195,19 @@ final readonly class HarvestCatalog
                 }
             }
             foreach ($this->em->getRepository(SetMembership::class)->findAll() as $row) {
-                if (!isset($members[$row->id])) { $this->em->remove($row); }
+                if (!isset($members[$row->id])) {
+                    $this->em->remove($row);
+                }
             }
             foreach ($this->em->getRepository(Artifact::class)->findAll() as $row) {
-                if (!isset($artifacts[$row->id])) { $this->em->remove($row); }
+                if (!isset($artifacts[$row->id])) {
+                    $this->em->remove($row);
+                }
             }
             foreach ($this->em->getRepository(Dataset::class)->findAll() as $row) {
-                if (!isset($datasets[$row->datasetKey])) { $this->em->remove($row); }
+                if (!isset($datasets[$row->datasetKey])) {
+                    $this->em->remove($row);
+                }
             }
             $this->em->flush();
             $afterMembership?->__invoke();

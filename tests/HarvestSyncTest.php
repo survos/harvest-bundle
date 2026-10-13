@@ -11,6 +11,7 @@ use Doctrine\ORM\ORMSetup;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\ORM\Tools\SchemaValidator;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
 use Survos\DataContracts\Metadata\PropertyKey;
 use Survos\DataContracts\Vocabulary\ItemField;
 use Survos\FolioBundle\Catalog\DatasetField as Field;
@@ -19,13 +20,12 @@ use Survos\FolioBundle\Catalog\FolioCatalogEntry;
 use Survos\HarvestBundle\Catalog\HarvestCatalog;
 use Survos\HarvestBundle\Entity\Artifact;
 use Survos\HarvestBundle\Entity\Dataset;
-use Survos\HarvestBundle\Entity\HarvestSyncCheckpoint;
 use Survos\HarvestBundle\Entity\SetMembership;
 use Survos\HarvestBundle\Sync\FolioAcquisition;
-use Survos\HarvestBundle\Sync\HarvestSync;
 use Survos\HarvestBundle\Sync\HarvestSelection;
-use Survos\HarvestBundle\Sync\SyncPlan;
+use Survos\HarvestBundle\Sync\HarvestSync;
 use Survos\HarvestBundle\Sync\Selection;
+use Survos\HarvestBundle\Sync\SyncPlan;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Style\SymfonyStyle;
@@ -33,7 +33,6 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
-use Psr\Log\AbstractLogger;
 
 final class HarvestSyncTest extends TestCase
 {
@@ -59,13 +58,17 @@ final class HarvestSyncTest extends TestCase
                 str_ends_with($url, '/api/datasets') => [Field::ITEMS => $this->remote, Field::NEXT => null],
                 default => throw new \LogicException('Unexpected HTTP call: '.$url),
             };
+
             return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR));
         });
         $this->client = new DatasetPublicationClient($http, 'https://harvest.example', 'test-token');
         $this->catalog = new HarvestCatalog($this->em, $this->client);
     }
 
-    protected function tearDown(): void { $this->em->close(); }
+    protected function tearDown(): void
+    {
+        $this->em->close();
+    }
 
     public function testMappingsAndAtomicCatalogWithRecordedMembership(): void
     {
@@ -171,6 +174,7 @@ final class HarvestSyncTest extends TestCase
         $this->installSchema();
         $logger = new class extends AbstractLogger {
             public array $warnings = [];
+
             public function log($level, \Stringable|string $message, array $context = []): void
             {
                 $this->warnings[] = strtr((string) $message, ['{set}' => $context['set'] ?? '', '{missing}' => $context['missing'] ?? '']);
@@ -242,6 +246,7 @@ final class HarvestSyncTest extends TestCase
         $acquire->expects(self::exactly(3))->method('acquire')->willReturnCallback(
             static function (FolioCatalogEntry $entry, bool $changed) use (&$changes): bool {
                 $changes[] = $changed;
+
                 return true;
             },
         );
@@ -277,6 +282,7 @@ final class HarvestSyncTest extends TestCase
         $catalogFor = function (array $params): HarvestCatalog {
             $config = ORMSetup::createAttributeMetadataConfiguration([dirname(__DIR__).'/src/Entity'], true);
             $config->enableNativeLazyObjects(true);
+
             return new HarvestCatalog(new EntityManager(DriverManager::getConnection($params), $config), $this->client);
         };
         $a = $catalogFor(['driver' => 'pdo_sqlite', 'path' => '/tmp/app-a.db']);
@@ -348,6 +354,7 @@ final class HarvestSyncTest extends TestCase
             Field::PROVIDER => ['curatescape'], PropertyKey::TAGS => [], 'tagsAll' => [],
             PropertyKey::CONTENT_TYPE => [], Field::FOLIOS => [], 'minRows' => 1,
         ]]]);
+
         return new HarvestSync($this->client, $this->catalog, $selection, $acquire, new LockFactory(new InMemoryStore()), $events);
     }
 
@@ -356,7 +363,10 @@ final class HarvestSyncTest extends TestCase
         (new SchemaTool($this->em))->createSchema($this->em->getMetadataFactory()->getAllMetadata());
     }
 
-    private function io(): SymfonyStyle { return new SymfonyStyle(new ArrayInput([]), new BufferedOutput()); }
+    private function io(): SymfonyStyle
+    {
+        return new SymfonyStyle(new ArrayInput([]), new BufferedOutput());
+    }
 
     private static function dataset(string $key): array
     {

@@ -12,14 +12,19 @@ use Symfony\Contracts\Cache\ItemInterface;
 /** Basic search over the authenticated API catalog; requires no Harvest browser login. */
 final readonly class HarvestSearch
 {
-    public function __construct(private DatasetPublicationClient $client, private CacheInterface $cache) {}
+    public function __construct(private DatasetPublicationClient $client, private CacheInterface $cache)
+    {
+    }
 
     public function search(string $query, string $provider, int $page, bool $refresh = false): array
     {
         $key = 'harvest.admin.catalog.'.hash('sha256', $this->client->source());
-        if ($refresh) { $this->cache->delete($key); }
+        if ($refresh) {
+            $this->cache->delete($key);
+        }
         $snapshot = $this->cache->get($key, function (ItemInterface $item): array {
             $item->expiresAfter(300);
+
             return ['datasets' => $this->client->datasets(), 'fetchedAt' => time()];
         });
         $matches = $providers = [];
@@ -27,9 +32,13 @@ final readonly class HarvestSearch
         foreach ($snapshot['datasets'] as $dataset) {
             foreach (FolioCatalogEntry::fromDataset($dataset, $this->client) as $entry) {
                 $providers[$entry->provider] = true;
-                if ($provider !== '' && $entry->provider !== $provider) { continue; }
+                if ('' !== $provider && $entry->provider !== $provider) {
+                    continue;
+                }
                 $text = implode(' ', [$entry->datasetKey, $entry->title, $entry->description, $entry->provider, ...$entry->tags]);
-                if ($needle !== '' && !str_contains(mb_strtolower($text), $needle)) { continue; }
+                if ('' !== $needle && !str_contains(mb_strtolower($text), $needle)) {
+                    continue;
+                }
                 $matches[] = $entry;
             }
         }

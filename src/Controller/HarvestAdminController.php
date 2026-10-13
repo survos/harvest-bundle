@@ -34,7 +34,8 @@ final class HarvestAdminController extends AbstractController
         private readonly DatasetPublicationClient $client,
         private readonly array $sets,
         private readonly string $baseLayout,
-    ) {}
+    ) {
+    }
 
     #[Route('', name: 'survos_harvest_admin', methods: ['GET'])]
     public function index(Request $request): Response
@@ -42,7 +43,10 @@ final class HarvestAdminController extends AbstractController
         $ready = $this->catalog->schemaReady();
         $query = mb_substr(trim($request->query->getString('q')), 0, 200);
         $set = $request->query->getString('set');
-        if ($set !== '' && !array_key_exists($set, $this->sets)) { throw $this->createNotFoundException('Unknown folio set.'); }
+        if ('' !== $set && !array_key_exists($set, $this->sets)) {
+            throw $this->createNotFoundException('Unknown folio set.');
+        }
+
         return $this->view('index', [
             'ready' => $ready, 'query' => $query, 'selectedSet' => $set,
             'results' => $ready ? $this->browser->page($query, $set, $request->query->getInt('page', 1)) : null,
@@ -58,6 +62,7 @@ final class HarvestAdminController extends AbstractController
             return $this->redirectToRoute('survos_harvest_admin');
         }
         $dataset = $this->browser->dataset($request->query->getString('key')) ?? throw $this->createNotFoundException('Dataset is not in the local catalog.');
+
         return $this->view('dataset', ['dataset' => $dataset, 'artifacts' => $this->browser->artifacts($dataset)]);
     }
 
@@ -74,8 +79,9 @@ final class HarvestAdminController extends AbstractController
         $code = $this->sync->sync(new SymfonyStyle($input, $output), dry: $dry, full: $request->request->getBoolean('full'));
         // Keep bounded plain text in the session; templates escape it, never render console HTML.
         $request->getSession()->set('survos_harvest.sync_result', [
-            'success' => $code === Command::SUCCESS, 'dry' => $dry, 'output' => mb_substr($output->fetch(), -24000),
+            'success' => Command::SUCCESS === $code, 'dry' => $dry, 'output' => mb_substr($output->fetch(), -24000),
         ]);
+
         return $this->redirectToRoute('survos_harvest_admin', status: Response::HTTP_SEE_OTHER);
     }
 
@@ -92,6 +98,7 @@ final class HarvestAdminController extends AbstractController
             // Remote exception text can contain deployment details. Never expose credentials.
             $error = 'Harvest could not be reached. Your local catalog is unchanged. Check the server and read token, then try again.';
         }
+
         return $this->view('search', ['query' => $query, 'provider' => $provider, 'results' => $results, 'error' => $error]);
     }
 

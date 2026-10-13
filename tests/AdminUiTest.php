@@ -27,7 +27,10 @@ final class AdminUiTest extends TestCase
         $this->browser->catchExceptions(false);
     }
 
-    protected function tearDown(): void { $this->kernel->shutdown(); }
+    protected function tearDown(): void
+    {
+        $this->kernel->shutdown();
+    }
 
     public function testAdminCatalogSearchHelpAndProtectedSync(): void
     {

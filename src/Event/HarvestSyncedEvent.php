@@ -16,5 +16,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  */
 final readonly class HarvestSyncedEvent
 {
-    public function __construct(public SymfonyStyle $io, public SyncPlan $plan, public bool $full = false) {}
+    public function __construct(public SymfonyStyle $io, public SyncPlan $plan, public bool $full = false)
+    {
+    }
 }

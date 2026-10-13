@@ -6,24 +6,24 @@ namespace Survos\HarvestBundle;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Survos\FolioBundle\Catalog\DatasetPublicationClient;
-use Survos\HarvestBundle\Catalog\HarvestCatalog;
-use Survos\HarvestBundle\Catalog\RecordedMembership;
 use Survos\FolioBundle\Set\RecordedMembershipProvider;
-use Survos\HarvestBundle\Schedule\HarvestSchedule;
 use Survos\HarvestBundle\Admin\CatalogBrowser;
 use Survos\HarvestBundle\Admin\HarvestSearch;
+use Survos\HarvestBundle\Catalog\HarvestCatalog;
+use Survos\HarvestBundle\Catalog\RecordedMembership;
 use Survos\HarvestBundle\Controller\HarvestAdminController;
 use Survos\HarvestBundle\Menu\HarvestMenuSubscriber;
-use Survos\TablerBundle\Event\MenuEvent;
+use Survos\HarvestBundle\Schedule\HarvestSchedule;
 use Survos\HarvestBundle\Sync\FolioAcquisition;
 use Survos\HarvestBundle\Sync\FolioDownloader;
+use Survos\HarvestBundle\Sync\HarvestSelection;
 use Survos\HarvestBundle\Sync\HarvestSync;
 use Survos\HarvestBundle\Sync\Selection;
-use Survos\HarvestBundle\Sync\HarvestSelection;
 use Survos\Kit\AbstractSurvosBundle;
 use Survos\Kit\SurvosKitBundle;
-use Survos\Kit\Traits\HasDoctrineEntities;
 use Survos\Kit\Traits\HasConfigurableRoutes;
+use Survos\Kit\Traits\HasDoctrineEntities;
+use Survos\TablerBundle\Event\MenuEvent;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -123,7 +123,11 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
             'dataset_api' => ['enabled' => true, 'server' => '%survos_harvest.server%', 'token' => '%survos_harvest.read_token%'],
             'local_passthrough' => '%survos_harvest.local_passthrough%',
             'catalog_ttl' => $config['catalog_ttl'],
-            'folio_sets' => array_map(static function (array $set): array { unset($set['download']); return $set; }, $config['folio_sets']),
+            'folio_sets' => array_map(static function (array $set): array {
+                unset($set['download']);
+
+                return $set;
+            }, $config['folio_sets']),
             'sites' => $config['sites'],
         ]);
     }

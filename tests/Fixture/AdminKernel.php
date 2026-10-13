@@ -42,8 +42,15 @@ final class AdminKernel extends Kernel
         yield new SurvosHarvestBundle();
     }
 
-    public function getCacheDir(): string { return sys_get_temp_dir().'/harvest-admin-test-cache'; }
-    public function getLogDir(): string { return $this->getCacheDir().'/logs'; }
+    public function getCacheDir(): string
+    {
+        return sys_get_temp_dir().'/harvest-admin-test-cache';
+    }
+
+    public function getLogDir(): string
+    {
+        return $this->getCacheDir().'/logs';
+    }
 
     protected function configureContainer(ContainerConfigurator $container): void
     {
@@ -83,6 +90,7 @@ final class AdminKernel extends Kernel
             $body = str_contains($url, '/api/changes')
                 ? [Field::CURSOR => 'epoch:1', Field::THROUGH => 'epoch:1', Field::ITEMS => [], Field::HAS_MORE => false]
                 : [Field::ITEMS => [$dataset], Field::NEXT => null];
+
             return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR));
         });
         $client = new DatasetPublicationClient($http, 'https://harvest.example', 'hidden-test-token');
@@ -92,7 +100,9 @@ final class AdminKernel extends Kernel
         $container->set('lock.factory', new LockFactory(new InMemoryStore()));
         $container->set(FolioAcquisition::class, new class implements FolioAcquisition {
             public function acquire(\Survos\FolioBundle\Catalog\FolioCatalogEntry $entry, bool $changed, \Symfony\Component\Console\Style\SymfonyStyle $io): bool
-            { throw new \LogicException('Track-only test must never download.'); }
+            {
+                throw new \LogicException('Track-only test must never download.');
+            }
         });
         $selection = new Selection(['tours' => ['download' => false, 'criteria' => ['provider' => ['curatescape'], 'tags' => [], 'tagsAll' => [], 'contentType' => [], 'folios' => [], 'minRows' => 1]]]);
         $catalog = $container->get(HarvestCatalog::class);

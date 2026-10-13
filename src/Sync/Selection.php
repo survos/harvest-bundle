@@ -4,18 +4,20 @@ declare(strict_types=1);
 
 namespace Survos\HarvestBundle\Sync;
 
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Survos\DataContracts\Metadata\PropertyKey;
 use Survos\FolioBundle\Catalog\DatasetField as Field;
 use Survos\FolioBundle\Catalog\DatasetPublicationClient;
 use Survos\FolioBundle\Catalog\FolioCatalogEntry;
 use Survos\FolioBundle\Set\FolioSetResolver;
 use Survos\HarvestBundle\Entity\Artifact;
-use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
 
 final readonly class Selection implements HarvestSelection
 {
-    public function __construct(private array $sets, private LoggerInterface $logger = new NullLogger()) {}
+    public function __construct(private array $sets, private LoggerInterface $logger = new NullLogger())
+    {
+    }
 
     public function plan(array $checkpoint, DatasetPublicationClient $client): SyncPlan
     {
@@ -24,8 +26,8 @@ final readonly class Selection implements HarvestSelection
             $membership[$setCode] = [];
             $criteria = $set['criteria'];
             $named = $criteria[Field::FOLIOS];
-            $selective = $criteria[PropertyKey::TAGS] !== [] || $criteria['tagsAll'] !== []
-                || $criteria[Field::PROVIDER] !== [] || $criteria[PropertyKey::CONTENT_TYPE] !== [];
+            $selective = [] !== $criteria[PropertyKey::TAGS] || [] !== $criteria['tagsAll']
+                || [] !== $criteria[Field::PROVIDER] || [] !== $criteria[PropertyKey::CONTENT_TYPE];
             foreach ($checkpoint[Field::ITEMS] as $dataset) {
                 $key = $dataset[Field::DATASET_KEY];
                 $candidate = [Field::PROVIDER => $dataset[Field::PROVIDER], PropertyKey::TAGS => $dataset[PropertyKey::TAGS],
@@ -42,7 +44,7 @@ final readonly class Selection implements HarvestSelection
             }
             $missing = array_diff($named, array_keys($checkpoint[Field::ITEMS]));
             // One unpublished folio must not stop every other set from syncing.
-            if ($missing !== []) {
+            if ([] !== $missing) {
                 $this->logger->warning('Set "{set}" names datasets absent from Harvest: {missing}.', ['set' => $setCode, 'missing' => implode(', ', $missing)]);
             }
         }

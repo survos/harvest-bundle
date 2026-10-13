@@ -8,12 +8,12 @@ use Survos\FolioBundle\Catalog\DatasetField as Field;
 use Survos\FolioBundle\Catalog\DatasetPublicationClient;
 use Survos\HarvestBundle\Catalog\HarvestCatalog;
 use Survos\HarvestBundle\Event\HarvestSyncedEvent;
-use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 final readonly class HarvestSync
 {
@@ -24,7 +24,8 @@ final readonly class HarvestSync
         private FolioAcquisition $acquisition,
         private LockFactory $locks,
         private ?EventDispatcherInterface $events = null,
-    ) {}
+    ) {
+    }
 
     #[AsCommand('harvest:sync', 'Synchronize Harvest metadata and selected folios into this app')]
     public function sync(
@@ -56,7 +57,7 @@ final readonly class HarvestSync
             $rows = $acquired = [];
             foreach ($plan->entries as $id => $entry) {
                 $changed = ($previous[$id] ?? null) !== $entry->revision;
-                $action = !$plan->downloads[$id] ? 'track' : ($entry->downloadUrl === null || !$entry->compressed ? 'check local' : ($changed ? 'acquire' : 'verify local'));
+                $action = !$plan->downloads[$id] ? 'track' : (null === $entry->downloadUrl || !$entry->compressed ? 'check local' : ($changed ? 'acquire' : 'verify local'));
                 $rows[] = [$entry->datasetKey, $entry->artifactCode(), $entry->rowCount, $action];
                 if (!$dry && $plan->downloads[$id] && $this->acquisition->acquire($entry, $changed, $io)) {
                     $acquired[$id] = $entry->revision;
@@ -78,7 +79,9 @@ final readonly class HarvestSync
 
             return Command::FAILURE;
         } finally {
-            if (!$dry) { $lock->release(); }
+            if (!$dry) {
+                $lock->release();
+            }
         }
     }
 
@@ -86,7 +89,7 @@ final readonly class HarvestSync
     public function status(SymfonyStyle $io): int
     {
         $state = $this->catalog->schemaReady() ? $this->catalog->checkpoint() : null;
-        if ($state === null) {
+        if (null === $state) {
             $io->note('No completed Harvest sync.');
         } else {
             $io->definitionList(['Source' => $state[Field::SOURCE]], ['Cursor' => $state[Field::CURSOR]],

@@ -10,9 +10,9 @@ use Survos\FolioBundle\Catalog\FolioCatalogEntry;
 final readonly class SyncPlan
 {
     /**
-     * @param array<string, mixed> $checkpoint
-     * @param array<string, FolioCatalogEntry> $entries Artifact identity => selected entry
-     * @param array<string, bool> $downloads Artifact identity => whether any matching set requests download
+     * @param array<string, mixed>               $checkpoint
+     * @param array<string, FolioCatalogEntry>   $entries    Artifact identity => selected entry
+     * @param array<string, bool>                $downloads  Artifact identity => whether any matching set requests download
      * @param array<string, array<string, bool>> $membership Set code => dataset key => download
      */
     public function __construct(
@@ -20,5 +20,6 @@ final readonly class SyncPlan
         public array $entries,
         public array $downloads,
         public array $membership,
-    ) {}
+    ) {
+    }
 }

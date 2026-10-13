@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\HarvestBundle\Attribute;
@@ -23,7 +24,7 @@ namespace Survos\HarvestBundle\Attribute;
 final class Harvest
 {
     /**
-     * @param array<string,string> $links
+     * @param array<string,string>       $links
      * @param array<string,class-string> $dtos  Map entity => DTO class
      */
     public function __construct(
@@ -34,6 +35,7 @@ final class Harvest
         public array $links = [],
         public ?string $locale = null,
         public ?string $description = null,
-        public array $dtos = []
-    ) {}
+        public array $dtos = [],
+    ) {
+    }
 }

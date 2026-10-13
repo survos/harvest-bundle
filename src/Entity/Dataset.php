@@ -50,5 +50,6 @@ final class Dataset
 
     public function __construct(
         #[ORM\Id, ORM\Column(name: 'dataset_key', length: 255)] public readonly string $datasetKey,
-    ) {}
+    ) {
+    }
 }

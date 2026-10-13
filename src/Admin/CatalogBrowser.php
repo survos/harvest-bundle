@@ -14,17 +14,19 @@ final readonly class CatalogBrowser
 {
     public const PAGE_SIZE = 25;
 
-    public function __construct(private EntityManagerInterface $em) {}
+    public function __construct(private EntityManagerInterface $em)
+    {
+    }
 
     public function page(string $query, string $setCode, int $page): array
     {
         $builder = $this->em->createQueryBuilder()->from(Dataset::class, 'd');
-        if ($query !== '') {
+        if ('' !== $query) {
             // Bound parameters protect SQL; escape LIKE wildcards for literal text search.
             $builder->andWhere("LOWER(d.datasetKey) LIKE :q ESCAPE '!' OR LOWER(d.label) LIKE :q ESCAPE '!' OR LOWER(d.provider) LIKE :q ESCAPE '!'")
                 ->setParameter('q', '%'.strtr(mb_strtolower($query), ['!' => '!!', '%' => '!%', '_' => '!_']).'%');
         }
-        if ($setCode !== '') {
+        if ('' !== $setCode) {
             $builder->innerJoin(SetMembership::class, 'm', 'WITH', 'm.dataset = d')->andWhere('m.setCode = :set')->setParameter('set', $setCode);
         }
         $total = (int) (clone $builder)->select('COUNT(d.datasetKey)')->getQuery()->getSingleScalarResult();
@@ -50,7 +52,10 @@ final readonly class CatalogBrowser
         ];
     }
 
-    public function dataset(string $key): ?Dataset { return $this->em->find(Dataset::class, $key); }
+    public function dataset(string $key): ?Dataset
+    {
+        return $this->em->find(Dataset::class, $key);
+    }
 
     public function artifacts(Dataset $dataset): array
     {

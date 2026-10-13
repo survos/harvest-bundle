@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\HarvestBundle\Metadata;
@@ -8,7 +9,7 @@ namespace Survos\HarvestBundle\Metadata;
 final class HarvestMetadata
 {
     /**
-     * @param array<string,string> $links
+     * @param array<string,string>       $links
      * @param array<string,class-string> $dtos
      */
     public function __construct(
@@ -21,6 +22,7 @@ final class HarvestMetadata
         public readonly ?string $description,
         public readonly array $dtos,
         public readonly string $serviceId,   // service id carrying the attribute
-        public readonly string $class        // FQCN of the service
-    ) {}
+        public readonly string $class,        // FQCN of the service
+    ) {
+    }
 }

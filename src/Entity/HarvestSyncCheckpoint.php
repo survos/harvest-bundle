@@ -21,5 +21,6 @@ final class HarvestSyncCheckpoint
 
     public function __construct(
         #[ORM\Id, ORM\Column(length: 32)] public readonly string $id = 'harvest',
-    ) {}
+    ) {
+    }
 }

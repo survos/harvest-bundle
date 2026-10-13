@@ -12,14 +12,16 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 final readonly class FolioDownloader implements FolioAcquisition
 {
-    public function __construct(private FolioPullCommand $pull, private FolioService $folios, private bool $localPassthrough) {}
+    public function __construct(private FolioPullCommand $pull, private FolioService $folios, private bool $localPassthrough)
+    {
+    }
 
     public function acquire(FolioCatalogEntry $entry, bool $changed, SymfonyStyle $io): bool
     {
-        if ($this->localPassthrough || $entry->downloadUrl === null || !$entry->compressed) {
+        if ($this->localPassthrough || null === $entry->downloadUrl || !$entry->compressed) {
             return $this->folios->exists($entry->datasetKey, $entry->locale);
         }
-        if ($this->pull->pullEntry($io, $entry, force: $changed) !== Command::SUCCESS) {
+        if (Command::SUCCESS !== $this->pull->pullEntry($io, $entry, force: $changed)) {
             throw new \RuntimeException('Could not acquire '.$entry->datasetKey.'.');
         }
 
