@@ -10,10 +10,12 @@ use Survos\FolioBundle\Catalog\DatasetPublicationClient;
 use Survos\FolioBundle\Catalog\FolioCatalogEntry;
 use Survos\FolioBundle\Set\FolioSetResolver;
 use Survos\HarvestBundle\Entity\Artifact;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 final readonly class Selection implements HarvestSelection
 {
-    public function __construct(private array $sets) {}
+    public function __construct(private array $sets, private LoggerInterface $logger = new NullLogger()) {}
 
     public function plan(array $checkpoint, DatasetPublicationClient $client): SyncPlan
     {
@@ -39,8 +41,9 @@ final readonly class Selection implements HarvestSelection
                 }
             }
             $missing = array_diff($named, array_keys($checkpoint[Field::ITEMS]));
+            // One unpublished folio must not stop every other set from syncing.
             if ($missing !== []) {
-                throw new \UnexpectedValueException(sprintf('Set "%s" names datasets absent from Harvest: %s.', $setCode, implode(', ', $missing)));
+                $this->logger->warning('Set "{set}" names datasets absent from Harvest: {missing}.', ['set' => $setCode, 'missing' => implode(', ', $missing)]);
             }
         }
 
