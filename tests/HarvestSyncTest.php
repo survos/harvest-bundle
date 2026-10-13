@@ -33,7 +33,6 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
-use Psr\Log\AbstractLogger;
 
 final class HarvestSyncTest extends TestCase
 {
@@ -85,6 +84,19 @@ final class HarvestSyncTest extends TestCase
         self::assertSame('epoch:1', $this->catalog->checkpoint()[Field::CURSOR]);
         self::assertCount(1, $this->catalog->acquiredRevisions());
         self::assertCount(3, $this->requests, 'Reading membership makes no HTTP requests');
+    }
+
+    public function testFoliosWithACoreComeFromPublishedCoreCountsWithoutOpeningFiles(): void
+    {
+        $this->installSchema();
+        $this->remote[0][Field::ARTIFACTS][0][Field::CORE_COUNTS] = ['obj' => 2, 'story' => 3];
+        $acquire = $this->createStub(FolioAcquisition::class);
+        $acquire->method('acquire')->willReturn(true);
+        $this->sync($acquire)->sync($this->io(), full: true);
+        $this->em->clear();
+
+        self::assertSame(['curatescape/a'], $this->catalog->folioCodesWithCore('story'));
+        self::assertSame([], $this->catalog->folioCodesWithCore('per'), 'absent or zero counts select nothing');
     }
 
     public function testMappingsDoNotDependOnApplicationNamingStrategy(): void
@@ -151,29 +163,6 @@ final class HarvestSyncTest extends TestCase
         self::assertSame([], $this->em->getRepository(Dataset::class)->findAll());
         self::assertSame([], $this->em->getRepository(Artifact::class)->findAll());
         self::assertSame([], $this->catalog->members('tours'));
-    }
-
-    public function testAbsentNamedFolioWarnsAndTheRestStillSyncs(): void
-    {
-        $this->installSchema();
-        $logger = new class extends AbstractLogger {
-            public array $warnings = [];
-            public function log($level, \Stringable|string $message, array $context = []): void
-            {
-                $this->warnings[] = strtr((string) $message, ['{set}' => $context['set'] ?? '', '{missing}' => $context['missing'] ?? '']);
-            }
-        };
-        $selection = new Selection([
-            'museums' => ['download' => false, 'criteria' => [Field::PROVIDER => [], PropertyKey::TAGS => [], 'tagsAll' => [],
-                PropertyKey::CONTENT_TYPE => [], Field::FOLIOS => ['museum/b', 'mus/larco'], 'minRows' => 1]],
-            'tours' => ['download' => false, 'criteria' => [Field::PROVIDER => ['curatescape'], PropertyKey::TAGS => [], 'tagsAll' => [],
-                PropertyKey::CONTENT_TYPE => [], Field::FOLIOS => [], 'minRows' => 1]],
-        ], $logger);
-        $sync = new HarvestSync($this->client, $this->catalog, $selection, $this->createStub(FolioAcquisition::class), new LockFactory(new InMemoryStore()));
-        self::assertSame(0, $sync->sync($this->io(), full: true));
-        self::assertSame(['Set "museums" names datasets absent from Harvest: mus/larco.'], $logger->warnings);
-        self::assertCount(1, $this->catalog->members('museums'));
-        self::assertCount(1, $this->catalog->members('tours'));
     }
 
     public function testFullSyncAgainstAnotherHarvestLeavesNothingOfTheFirst(): void

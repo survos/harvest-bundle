@@ -69,6 +69,26 @@ final readonly class HarvestCatalog
         return $revisions;
     }
 
+    /**
+     * Acquired folios that have at least one row in $core (e.g. "story"), by folio code.
+     * Answered from each artifact's published coreCounts, so no folio file is opened.
+     *
+     * @return list<string>
+     */
+    public function folioCodesWithCore(string $core): array
+    {
+        $codes = [];
+        $artifacts = $this->em->getRepository(Artifact::class)->findBy(['type' => [Field::FOLIO_TYPE, Field::FOLIO_ARCHIVE_TYPE]]);
+        foreach ($artifacts as $artifact) {
+            if ($artifact->acquiredRevision !== null && ($artifact->payload[Field::CORE_COUNTS][$core] ?? 0) > 0) {
+                $codes[] = $artifact->dataset->datasetKey;
+            }
+        }
+        sort($codes);
+
+        return array_values(array_unique($codes));
+    }
+
     /** @return list<FolioCatalogEntry> Recorded membership, usable without any Harvest HTTP call. */
     public function members(string $setCode): array
     {

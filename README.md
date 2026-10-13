@@ -157,10 +157,8 @@ never replace a published tag.
 ## Scheduled sync and application projections (next patch)
 
 The bundle registers Symfony's `harvest` schedule by default. It runs `harvest:sync`
-every two minutes (`schedule_interval`, or the `HARVEST_SYNC_INTERVAL` env var, e.g.
-`"30 seconds"`), retaining its schedule state and replaying only the last missed
-run. Set `schedule_enabled: false` to opt out. A set that names a folio Harvest does
-not list logs a warning; the rest of the sync proceeds. Run a persistent worker:
+every five minutes, retaining its schedule state and replaying only the last missed
+run. Set `schedule_enabled: false` to opt out. Run a persistent worker:
 
 ```bash
 bin/console messenger:consume scheduler_harvest --time-limit=3600 --memory-limit=256M
