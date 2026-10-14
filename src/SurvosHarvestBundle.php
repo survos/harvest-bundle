@@ -23,7 +23,7 @@ use Survos\Kit\AbstractSurvosBundle;
 use Survos\Kit\SurvosKitBundle;
 use Survos\Kit\Traits\HasConfigurableRoutes;
 use Survos\Kit\Traits\HasDoctrineEntities;
-use Survos\TablerBundle\Event\MenuEvent;
+use Survos\MenuBundle\MenuSlot;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -86,7 +86,7 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
         $services->set(CatalogBrowser::class);
         $services->set(HarvestSearch::class)->arg('$cache', new Reference('cache.app'));
         $services->set(HarvestAdminController::class)->args(['$sets' => $config['folio_sets'], '$baseLayout' => $config['base_layout']]);
-        if ($config['routes_enabled'] && $config['admin_navbar_menu'] && class_exists(MenuEvent::class)) {
+        if ($config['routes_enabled'] && $config['admin_navbar_menu'] && class_exists(MenuSlot::class)) {
             $services->set(HarvestMenuSubscriber::class);
         }
         $services->set(Selection::class)->arg('$sets', $config['folio_sets']);

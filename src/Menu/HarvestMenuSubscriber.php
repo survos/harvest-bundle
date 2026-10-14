@@ -4,18 +4,19 @@ declare(strict_types=1);
 
 namespace Survos\HarvestBundle\Menu;
 
-use Survos\TablerBundle\Event\MenuEvent;
+use Survos\MenuBundle\Attribute\AsMenuListener;
+use Survos\MenuBundle\Event\MenuEvent;
+use Survos\MenuBundle\MenuSlot;
 use Symfony\Bundle\SecurityBundle\Security;
-use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 
-/** Registered only when Tabler is installed and Harvest routes/menu are enabled. */
+/** Registered only when survos/menu-bundle is installed and Harvest routes/menu are enabled. */
 final readonly class HarvestMenuSubscriber
 {
     public function __construct(private Security $security)
     {
     }
 
-    #[AsEventListener(event: MenuEvent::ADMIN_NAVBAR_MENU)]
+    #[AsMenuListener(MenuSlot::ADMIN_NAVBAR_MENU)]
     public function onAdminNavbarMenu(MenuEvent $event): void
     {
         if (!$this->security->isGranted('ROLE_ADMIN')) {
