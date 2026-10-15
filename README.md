@@ -63,10 +63,11 @@ The default server is `https://harvest.survos.com`. An absent or empty
 
 ```dotenv
 HARVEST_SERVER=https://127.0.0.1:8011
-HARVEST_READ_TOKEN=your-read-token
 ```
 
-The metadata API currently requires that token. You can also configure `server`
+Folios land under `APP_DATA_DIR` (folio-bundle's `data_dir`). Published folios are
+public, so no token is needed; `HARVEST_READ_TOKEN` is optional and reserved for
+private folios. A token that is sent must be valid. You can also configure `server`
 and `read_token` directly. The bundle configures folio-bundle's dataset API and
 server for downloads; remove conflicting legacy `survos_folio.folio_server` or
 `dataset_api` settings. `local_passthrough: true` uses an existing shared folio
