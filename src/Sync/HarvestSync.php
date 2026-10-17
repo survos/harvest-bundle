@@ -32,7 +32,11 @@ final readonly class HarvestSync
         SymfonyStyle $io,
         #[Option('Preview remote changes and selection without writes or downloads')] bool $dry = false,
         #[Option('Fetch the complete Harvest catalog and replace this app\'s copy of it (purges the harvest_* tables first, in the same transaction)')] bool $full = false,
+        #[Option('Download at most this many new or changed folios this run; the rest stay pending for the next run')] ?int $limit = null,
     ): int {
+        if (null !== $limit && $limit < 0) {
+            throw new \InvalidArgumentException('--limit must be zero or greater.');
+        }
         $lock = $this->locks->createLock($this->catalog->lockKey(), ttl: null);
         try {
             // Dry runs neither acquire a lock nor create a lock table/file.
@@ -55,11 +59,21 @@ final readonly class HarvestSync
                 $io->text(sprintf('Set %s: %d datasets', $code, count($members)));
             }
             $rows = $acquired = [];
+            $downloaded = 0;
             foreach ($plan->entries as $id => $entry) {
                 $changed = ($previous[$id] ?? null) !== $entry->revision;
                 $action = !$plan->downloads[$id] ? 'track' : (null === $entry->downloadUrl || !$entry->compressed ? 'check local' : ($changed ? 'acquire' : 'verify local'));
+                // A limit only holds back real downloads; verifying a file already on disk is cheap.
+                // A deferred folio is simply not recorded as acquired, so the next run picks it up.
+                if ('acquire' === $action) {
+                    if (null !== $limit && $downloaded >= $limit) {
+                        $action = 'deferred';
+                    } else {
+                        ++$downloaded;
+                    }
+                }
                 $rows[] = [$entry->datasetKey, $entry->artifactCode(), $entry->rowCount, $action];
-                if (!$dry && $plan->downloads[$id] && $this->acquisition->acquire($entry, $changed, $io)) {
+                if (!$dry && 'deferred' !== $action && $plan->downloads[$id] && $this->acquisition->acquire($entry, $changed, $io)) {
                     $acquired[$id] = $entry->revision;
                 }
             }
