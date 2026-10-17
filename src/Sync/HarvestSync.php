@@ -7,6 +7,7 @@ namespace Survos\HarvestBundle\Sync;
 use Survos\FolioBundle\Catalog\DatasetField as Field;
 use Survos\FolioBundle\Catalog\DatasetPublicationClient;
 use Survos\HarvestBundle\Catalog\HarvestCatalog;
+use Survos\HarvestBundle\Event\FolioAcquiredEvent;
 use Survos\HarvestBundle\Event\HarvestSyncedEvent;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
@@ -58,7 +59,7 @@ final readonly class HarvestSync
             foreach ($plan->membership as $code => $members) {
                 $io->text(sprintf('Set %s: %d datasets', $code, count($members)));
             }
-            $rows = $acquired = [];
+            $rows = $acquired = $fresh = [];
             $downloaded = 0;
             foreach ($plan->entries as $id => $entry) {
                 $changed = ($previous[$id] ?? null) !== $entry->revision;
@@ -75,6 +76,9 @@ final readonly class HarvestSync
                 $rows[] = [$entry->datasetKey, $entry->artifactCode(), $entry->rowCount, $action];
                 if (!$dry && 'deferred' !== $action && $plan->downloads[$id] && $this->acquisition->acquire($entry, $changed, $io)) {
                     $acquired[$id] = $entry->revision;
+                    if ($changed) {
+                        $fresh[$id] = true;
+                    }
                 }
             }
             $io->table(['Dataset', 'Variant', 'Rows', 'Action'], $rows);
@@ -85,6 +89,14 @@ final readonly class HarvestSync
                     $this->events?->dispatch(new HarvestSyncedEvent($io, $plan, $full));
                 }, purge: $full);
                 $io->success('Harvest catalog, set membership and checkpoint committed to the application database.');
+                // After the commit, so a listener's failure cannot undo the checkpoint.
+                foreach ($fresh as $id => $_) {
+                    try {
+                        $this->events?->dispatch(new FolioAcquiredEvent($plan->entries[$id]));
+                    } catch (\Throwable $e) {
+                        $io->warning(sprintf('%s: after-acquire listener failed: %s', $plan->entries[$id]->datasetKey, $e->getMessage()));
+                    }
+                }
             }
 
             return Command::SUCCESS;
