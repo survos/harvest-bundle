@@ -106,6 +106,64 @@ Inject `Survos\HarvestBundle\Catalog\HarvestCatalog` and call
 This read makes no HTTP call. Migrate and run an initial sync before switching
 application pages to the local catalog.
 
+## Filtered item sources
+
+Folio selection and item selection are separate. `criteria` continues to determine
+set membership and `download` continues to control acquisition. `item_criteria`
+filters the items streamed from those members; it changes neither their membership
+nor the underlying folio files.
+
+```yaml
+survos_harvest:
+    folio_sets:
+        withImages:
+            criteria:
+                provider: [nara]
+            download: false
+            item_criteria:
+                minImages: 1
+        mistralHandwriting:
+            criteria:
+                provider: [nara]
+            download: false
+            item_criteria:
+                tags: ['ai:handwriting:mistral']
+```
+
+`minImages` counts attached `photo`, `scan`, and `document` pages with non-empty
+URLs. Audio/video pages and thumbnail metadata do not count. A folio without a page
+table has zero images. The default is `0`. `tags` matches **any** listed tag with
+exact, case-sensitive equality; its default empty list imposes no tag condition.
+Both predicates must pass when both are configured. Canonical item tags take
+precedence over legacy `extras.source_tags`.
+
+Inject `Survos\HarvestBundle\Set\SetItemSource` into an application indexer or
+importer:
+
+```php
+$report = new \Survos\FolioBundle\Service\FolioDocumentStreamReport();
+foreach ($source->documents('mistralHandwriting', keep: ['title', 'tags'], report: $report) as $item) {
+    // Feed your index or database. Use rowId as the original source identity.
+    $indexer->upsert($item['rowId'], $item);
+}
+if ($report->failed !== []) {
+    // Handle incomplete input before replacing an index or deleting absent records.
+    throw new \RuntimeException(json_encode($report->failed, JSON_THROW_ON_ERROR));
+}
+```
+
+The source reads recorded membership from the application's catalog and streams
+only local folio files using the existing `FolioDocumentStream`. It never syncs or
+downloads; missing/unreadable files are recorded in `report.failed`. Unknown set
+names throw. Source/locale artifacts do not duplicate items: `locale: 'en'`
+explicitly selects the local English variant, otherwise the source folio is used.
+The set's `core` defaults to `obj`. Filtering happens before `keep` projection and
+report counts include only yielded items. `rowId`, `folioCode`, `coreCode`, and
+`localId` retain provenance. Applications own batching, storage and index updates.
+
+These filters are opt-in through `SetItemSource`; existing folio browsers and
+commands that read raw membership are not implicitly filtered.
+
 ## Administration UI
 
 Visit `/admin/harvest/` as a user with `ROLE_ADMIN`. The local catalog, dataset

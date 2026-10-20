@@ -14,6 +14,7 @@ use Survos\HarvestBundle\Catalog\RecordedMembership;
 use Survos\HarvestBundle\Controller\HarvestAdminController;
 use Survos\HarvestBundle\Menu\HarvestMenuSubscriber;
 use Survos\HarvestBundle\Schedule\HarvestSchedule;
+use Survos\HarvestBundle\Set\SetItemSource;
 use Survos\HarvestBundle\Sync\FolioAcquisition;
 use Survos\HarvestBundle\Sync\FolioDownloader;
 use Survos\HarvestBundle\Sync\HarvestSelection;
@@ -61,6 +62,14 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
                 ->scalarNode('label')->defaultNull()->end()
                 ->scalarNode('core')->defaultValue('obj')->end()
                 ->booleanNode('download')->info('False records membership without acquiring folio files.')->defaultTrue()->end()
+                ->arrayNode('item_criteria')->addDefaultsIfNotSet()->children()
+                    ->integerNode('minImages')->info('Minimum attached photo, scan or document image pages; does not select or download folios.')->min(0)->defaultValue(0)->end()
+                    ->arrayNode('tags')->info('Match any exact item tag (case-sensitive); empty means unrestricted.')->defaultValue([])
+                        ->scalarPrototype()->cannotBeEmpty()->validate()
+                            ->ifTrue(static fn (mixed $tag): bool => !is_string($tag) || '' === trim($tag))
+                            ->thenInvalid('Item tags must be non-empty strings.')
+                        ->end()->end()->end()
+                ->end()->end()
                 ->arrayNode('criteria')->isRequired()->children()
                     ->arrayNode('provider')->scalarPrototype()->end()->end()
                     ->arrayNode('tags')->scalarPrototype()->end()->end()
@@ -79,6 +88,7 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
         $services = $container->services()->defaults()->autowire()->autoconfigure();
         $services->set(HarvestCatalog::class)->arg('$em', new Reference(EntityManagerInterface::class));
         $services->set(RecordedMembership::class);
+        $services->set(SetItemSource::class)->arg('$sets', $config['folio_sets']);
         $services->alias(RecordedMembershipProvider::class, RecordedMembership::class);
         if ($config['schedule_enabled']) {
             $services->set(HarvestSchedule::class)->args(['$cache' => new Reference('cache.app'), '$interval' => $config['schedule_interval']]);
@@ -124,7 +134,7 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
             'local_passthrough' => '%survos_harvest.local_passthrough%',
             'catalog_ttl' => $config['catalog_ttl'],
             'folio_sets' => array_map(static function (array $set): array {
-                unset($set['download']);
+                unset($set['download'], $set['item_criteria']);
 
                 return $set;
             }, $config['folio_sets']),

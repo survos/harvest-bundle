@@ -41,6 +41,42 @@ final class SurvosHarvestBundleTest extends TestCase
         self::assertSame('obj', $folio['folio_sets']['photos']['core']);
     }
 
+    public function testItemCriteriaAreSeparateFromFolioSelection(): void
+    {
+        $bundle = new SurvosHarvestBundle();
+        $container = new ContainerBuilder();
+        $container->registerExtension($bundle->getContainerExtension());
+        $container->loadFromExtension('survos_harvest', [
+            'folio_sets' => [
+                'filtered' => ['criteria' => ['provider' => ['nara']], 'item_criteria' => ['minImages' => 1, 'tags' => ['ai:handwriting:mistral']]],
+                'all' => ['criteria' => ['provider' => ['nara']]],
+            ],
+        ]);
+        $extension = $bundle->getContainerExtension();
+        $config = (new \Symfony\Component\Config\Definition\Processor())->processConfiguration(
+            $extension->getConfiguration([], $container), $container->getExtensionConfig('survos_harvest'),
+        );
+        self::assertSame(['minImages' => 0, 'tags' => []], $config['folio_sets']['all']['item_criteria']);
+        self::assertSame(['ai:handwriting:mistral'], $config['folio_sets']['filtered']['item_criteria']['tags']);
+        self::assertSame($config['folio_sets']['all']['criteria'], $config['folio_sets']['filtered']['criteria']);
+        $extension->prepend($container);
+        $forwarded = $container->getExtensionConfig('survos_folio')[0]['folio_sets']['filtered'];
+        self::assertArrayNotHasKey('item_criteria', $forwarded);
+        self::assertSame(['nara'], $forwarded['criteria']['provider']);
+    }
+
+    public function testNegativeImageMinimumIsRejected(): void
+    {
+        $bundle = new SurvosHarvestBundle();
+        $container = new ContainerBuilder();
+        $extension = $bundle->getContainerExtension();
+        $this->expectException(\Symfony\Component\Config\Definition\Exception\InvalidConfigurationException::class);
+        (new \Symfony\Component\Config\Definition\Processor())->processConfiguration(
+            $extension->getConfiguration([], $container),
+            [['folio_sets' => ['bad' => ['criteria' => [], 'item_criteria' => ['minImages' => -1]]]]],
+        );
+    }
+
     public function testBundleCompilesWithoutApplicationConfiguration(): void
     {
         $bundle = new SurvosHarvestBundle();
