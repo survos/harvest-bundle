@@ -20,6 +20,33 @@ final readonly class SetItemSource
     ) {
     }
 
+    public function criteria(string $setCode): ItemCriteria
+    {
+        $set = $this->sets[$setCode] ?? throw new \InvalidArgumentException(sprintf('Unknown Harvest folio set "%s".', $setCode));
+        $criteria = $set['item_criteria'];
+
+        return new ItemCriteria($criteria['minImages'], $criteria['tags']);
+    }
+
+    public function core(string $setCode): string
+    {
+        $this->criteria($setCode);
+
+        return $this->sets[$setCode]['core'];
+    }
+
+    /** Recorded source folios; resolving a view never triggers a fetch. */
+    public function folios(string $setCode): array
+    {
+        $this->criteria($setCode); // Validate the name before consulting recorded membership.
+        $codes = [];
+        foreach ($this->catalog->members($setCode) as $entry) {
+            $codes[$entry->datasetKey] = $entry->datasetKey;
+        }
+
+        return array_values($codes);
+    }
+
     /**
      * Uses recorded membership; never syncs, fetches, or downloads.
      * Missing/unreadable local files are reported through $report, like FolioDocumentStream.
@@ -36,19 +63,14 @@ final readonly class SetItemSource
         ?FolioDocumentStreamReport $report = null,
     ): \Generator {
         $set = $this->sets[$setCode] ?? throw new \InvalidArgumentException(sprintf('Unknown Harvest folio set "%s".', $setCode));
-        $criteria = $set['item_criteria'];
-        $codes = [];
-        foreach ($this->catalog->members($setCode) as $entry) {
-            $codes[$entry->datasetKey] = $entry->datasetKey;
-        }
-
+        $criteria = $this->criteria($setCode);
         yield from $this->stream->documents(
-            array_values($codes),
+            $this->folios($setCode),
             core: $set['core'],
             keep: $keep,
             openLocale: $locale,
             report: $report,
-            itemCriteria: new ItemCriteria($criteria['minImages'], $criteria['tags']),
+            itemCriteria: $criteria,
         );
     }
 }
