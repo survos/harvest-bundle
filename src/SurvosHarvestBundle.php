@@ -58,6 +58,10 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
                 ->booleanNode('restrict')->defaultFalse()->end()
             ->end()->end()->end()
             ->booleanNode('local_passthrough')->defaultFalse()->end()
+            ->arrayNode('duckdb')->addDefaultsIfNotSet()->children()
+                ->booleanNode('enabled')->info('Prepare a local DuckDB companion after acquiring each selected folio. Requires native PDO DuckDB 2.x.')->defaultFalse()->end()
+                ->booleanNode('fts')->info('Include a persisted title/description FTS index in the companion.')->defaultFalse()->end()
+            ->end()->end()
             ->arrayNode('folio_sets')->normalizeKeys(false)->useAttributeAsKey('code')->arrayPrototype()->children()
                 ->scalarNode('label')->defaultNull()->end()
                 ->scalarNode('core')->defaultValue('obj')->end()
@@ -101,7 +105,8 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
         }
         $services->set(Selection::class)->arg('$sets', $config['folio_sets']);
         $services->alias(HarvestSelection::class, Selection::class);
-        $services->set(FolioDownloader::class)->arg('$localPassthrough', $config['local_passthrough']);
+        $services->set(FolioDownloader::class)->arg('$localPassthrough', $config['local_passthrough'])
+            ->arg('$prepareDuckdb', $config['duckdb']['enabled'])->arg('$duckdbFts', $config['duckdb']['fts']);
         $services->alias(FolioAcquisition::class, FolioDownloader::class);
         $services->set(HarvestSync::class)->arg('$locks', new Reference($config['lock_factory']));
         // The transport is shared with folio-bundle's single-entry downloader.

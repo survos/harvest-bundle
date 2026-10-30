@@ -106,6 +106,39 @@ Inject `Survos\HarvestBundle\Catalog\HarvestCatalog` and call
 This read makes no HTTP call. Migrate and run an initial sync before switching
 application pages to the local catalog.
 
+## Optional local DuckDB preparation
+
+Enable this in a consumer with native PDO DuckDB 2.x installed:
+
+```yaml
+survos_harvest:
+    duckdb:
+        enabled: true
+        fts: true
+```
+
+`harvest:sync` uses the existing archive download and restore path, then prepares
+`<dataset>.duckdb` alongside `<dataset>.folio` before recording acquisition.
+Both options default to false. FTS requires the DuckDB `fts` extension to be
+installed for the PHP runtime; preparation loads it but does not install it.
+The optional index covers the search projection's title and description.
+
+Preparation belongs to folio-bundle, and generic FTS indexing to search-bundle.
+It copies the folio's logical tables, creates typed DTO tables and a search
+projection, then checkpoints and atomically publishes the completed file.
+It uses a per-target local lock and preserves the previous companion on failure.
+The archive and Doctrine ORM access remain unchanged.
+
+Every acquired selection is checked, including unchanged revisions. A matching
+shared build ID, DTO schema signature, exporter/projection versions and FTS option
+reuse the file; missing or stale companions are rebuilt. A conversion error fails
+sync before its catalog checkpoint is committed, so the next run retries it.
+`--dry`, deferred downloads and sets with `download: false` never prepare files.
+Older archives without `_folio_build` must be rebuilt by the producer first.
+
+This is synchronous. It neither uploads the companion nor changes local/remote
+search selection. A future dev action can call the same acquisition service.
+
 ## Filtered item sources
 
 Folio selection and item selection are separate. `criteria` continues to determine
