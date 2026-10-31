@@ -92,6 +92,21 @@ the proposed selection. It writes no catalog, checkpoint, membership, lock or
 folio files and performs no downloads. With no Harvest tables, it previews an
 initial full sync without creating schema. `--full` forces complete reconciliation.
 
+Use repeatable `--folio=provider/dataset` options to acquire only specific folios
+already selected by the application. Every selected variant of those exact dataset
+keys is eligible; unknown or unselected keys fail before acquisition or commit.
+The full catalog and set membership are still reconciled. Excluded folios are
+shown as `outside scope`, are not opened or downloaded, and receive no new
+acquisition receipt. Existing same-source receipts remain unchanged; changing
+servers still discards the old source's receipts. This option does not verify or
+repair earlier acquisitions. A later unscoped run can acquire pending folios.
+`--limit` counts only eligible new or changed downloads, and `--dry` previews both
+options without writes.
+
+```bash
+bin/console harvest:sync --dry --folio=cron-america/sn84030143 --folio=cron-america/sn90059960
+```
+
 A real sync locks, fetches the current catalog/change feed, acquires selected
 folios, then commits dataset metadata, artifacts, membership and checkpoint in
 one database transaction. A failed download or database write leaves the cursor

@@ -348,6 +348,89 @@ final class HarvestSyncTest extends TestCase
         self::assertSame([], $this->catalog->acquiredRevisions());
     }
 
+    public function testScopedAcquisitionRetainsFullCatalogMembershipAndEarlierReceipts(): void
+    {
+        $this->installSchema();
+        $initial = $this->createStub(FolioAcquisition::class);
+        $initial->method('acquire')->willReturn(true);
+        self::assertSame(0, $this->sync($initial)->sync($this->io()));
+        $earlier = $this->catalog->acquiredRevisions();
+        $this->remote[0][Field::ARTIFACTS][0][Field::REVISION] = 'revision:2';
+        $this->remote[] = self::dataset('curatescape/new');
+        $acquire = $this->createMock(FolioAcquisition::class);
+        $acquire->expects(self::once())->method('acquire')
+            ->with(self::callback(static fn (FolioCatalogEntry $entry): bool => 'curatescape/new' === $entry->datasetKey), true)
+            ->willReturn(true);
+        self::assertSame(0, $this->sync($acquire)->sync($this->io(), full: true, folio: ['curatescape/new']));
+        self::assertCount(3, $this->em->getRepository(Dataset::class)->findAll());
+        self::assertCount(2, $this->catalog->members('tours'));
+        $receipts = $this->catalog->acquiredRevisions();
+        self::assertCount(2, $receipts);
+        foreach ($earlier as $id => $revision) {
+            self::assertSame($revision, $receipts[$id], 'An excluded changed folio must not be stamped with its new revision');
+        }
+    }
+
+    public function testScopedSourceChangeDoesNotInventReceiptsForExcludedFolios(): void
+    {
+        $this->installSchema();
+        $initial = $this->createStub(FolioAcquisition::class);
+        $initial->method('acquire')->willReturn(true);
+        self::assertSame(0, $this->sync($initial)->sync($this->io()));
+        $this->client = new DatasetPublicationClient($this->http, 'https://harvest.other', 'test-token');
+        $this->catalog = new HarvestCatalog($this->em, $this->client);
+        $this->remote[] = self::dataset('curatescape/new');
+        $acquire = $this->createMock(FolioAcquisition::class);
+        $acquire->expects(self::once())->method('acquire')
+            ->with(self::callback(static fn (FolioCatalogEntry $entry): bool => 'curatescape/new' === $entry->datasetKey), true)
+            ->willReturn(true);
+        self::assertSame(0, $this->sync($acquire)->sync($this->io(), full: true, folio: ['curatescape/new']));
+        self::assertCount(3, $this->em->getRepository(Dataset::class)->findAll());
+        self::assertCount(2, $this->catalog->members('tours'));
+        self::assertSame([Artifact::identity('curatescape/new', Field::FOLIO_ARCHIVE_TYPE, Field::DEFAULT_CODE) => 'revision:1'],
+            $this->catalog->acquiredRevisions());
+    }
+
+    public function testUnknownOrUnselectedScopeFailsBeforeAcquisitionOrCommit(): void
+    {
+        $this->installSchema();
+        $never = $this->createMock(FolioAcquisition::class);
+        $never->expects(self::never())->method('acquire');
+        foreach (['missing/paper', 'museum/b', ''] as $invalid) {
+            self::assertSame(1, $this->sync($never)->sync($this->io(), folio: ['curatescape/a', $invalid]));
+            self::assertNull($this->catalog->checkpoint());
+            self::assertSame([], $this->em->getRepository(Dataset::class)->findAll());
+        }
+    }
+
+    public function testScopedDryRunDoesNotWriteOrDownload(): void
+    {
+        $never = $this->createMock(FolioAcquisition::class);
+        $never->expects(self::never())->method('acquire');
+        self::assertSame(0, $this->sync($never)->sync($this->io(), dry: true, folio: ['curatescape/a']));
+        self::assertSame([], $this->em->getConnection()->createSchemaManager()->listTableNames());
+    }
+
+    public function testScopedLimitCountsOnlyInScopeDownloadsAndLeavesOthersPending(): void
+    {
+        $this->installSchema();
+        $this->remote[] = self::dataset('curatescape/b');
+        $this->remote[] = self::dataset('curatescape/c');
+        $acquire = $this->createMock(FolioAcquisition::class);
+        $acquire->expects(self::once())->method('acquire')
+            ->with(self::callback(static fn (FolioCatalogEntry $entry): bool => 'curatescape/b' === $entry->datasetKey), true)
+            ->willReturn(true);
+        self::assertSame(0, $this->sync($acquire)->sync($this->io(), limit: 1, folio: ['curatescape/b', 'curatescape/c', 'curatescape/b']));
+        self::assertCount(3, $this->catalog->members('tours'));
+        self::assertCount(1, $this->catalog->acquiredRevisions());
+        $remaining = $this->createMock(FolioAcquisition::class);
+        $remaining->expects(self::once())->method('acquire')
+            ->with(self::callback(static fn (FolioCatalogEntry $entry): bool => 'curatescape/c' === $entry->datasetKey), true)
+            ->willReturn(true);
+        self::assertSame(0, $this->sync($remaining)->sync($this->io(), folio: ['curatescape/c']));
+        self::assertCount(2, $this->catalog->acquiredRevisions());
+    }
+
     private function sync(FolioAcquisition $acquire, bool $download = true, ?\Symfony\Contracts\EventDispatcher\EventDispatcherInterface $events = null): HarvestSync
     {
         $selection = new Selection(['tours' => ['download' => $download, 'criteria' => [

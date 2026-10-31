@@ -34,6 +34,7 @@ final readonly class HarvestSync
         #[Option('Preview remote changes and selection without writes or downloads')] bool $dry = false,
         #[Option('Fetch the complete Harvest catalog and replace this app\'s copy of it (purges the harvest_* tables first, in the same transaction)')] bool $full = false,
         #[Option('Download at most this many new or changed folios this run; the rest stay pending for the next run')] ?int $limit = null,
+        #[Option('Acquire only these exact dataset keys from the application selection (repeatable); still synchronize the full catalog and membership')] array $folio = [],
     ): int {
         if (null !== $limit && $limit < 0) {
             throw new \InvalidArgumentException('--limit must be zero or greater.');
@@ -54,6 +55,11 @@ final readonly class HarvestSync
             $saved = $ready ? $this->catalog->checkpoint() : null;
             $previous = $ready ? $this->catalog->acquiredRevisions() : [];
             $plan = $this->selection->plan($this->client->changes($saved, $full), $this->client);
+            $selectedKeys = array_map(static fn ($entry): string => $entry->datasetKey, $plan->entries);
+            $unknown = array_diff($folio, $selectedKeys);
+            if ([] !== $unknown) {
+                throw new \InvalidArgumentException('Folios outside the application selection: '.implode(', ', $unknown));
+            }
             $io->definitionList(['Source' => $this->client->source()], ['Datasets in catalog' => count($plan->checkpoint[Field::ITEMS])],
                 ['Selected folio variants' => count($plan->entries)], ['Cursor' => $plan->checkpoint[Field::CURSOR]]);
             foreach ($plan->membership as $code => $members) {
@@ -62,6 +68,11 @@ final readonly class HarvestSync
             $rows = $acquired = $fresh = [];
             $downloaded = 0;
             foreach ($plan->entries as $id => $entry) {
+                // Scope acquisition only; leave membership and normal receipt reconciliation to commit().
+                if ([] !== $folio && !in_array($entry->datasetKey, $folio, true)) {
+                    $rows[] = [$entry->datasetKey, $entry->artifactCode(), $entry->rowCount, 'outside scope'];
+                    continue;
+                }
                 $changed = ($previous[$id] ?? null) !== $entry->revision;
                 $action = !$plan->downloads[$id] ? 'track' : (null === $entry->downloadUrl || !$entry->compressed ? 'check local' : ($changed ? 'acquire' : 'verify local'));
                 // A limit only holds back real downloads; verifying a file already on disk is cheap.
