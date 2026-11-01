@@ -301,3 +301,40 @@ service. `plan()` receives the complete reconciled checkpoint and returns a
 Read application selection on every call, retain the complete checkpoint, and
 keep planning free of writes/downloads so `harvest:sync --dry` stays safe.
 The default implementation remains the configured `folio_sets` selector.
+
+### Remote translated DuckDB snapshots
+
+With folio-bundle 2.45.16+, metadata-only sync records published DuckDB languages,
+immutable S3 addresses and revisions in the existing catalog tables. No schema
+change or local snapshot is required. Configure the consumer:
+
+```yaml
+survos_harvest:
+    duckdb:
+        remote: true
+        default_locale: en
+        s3:
+            endpoint: '%env(HARVEST_S3_ENDPOINT)%'
+            access_key: '%env(HARVEST_S3_ACCESS_ID)%'
+            secret_key: '%env(HARVEST_S3_ACCESS_SECRET)%'
+            region: fsn1
+    folio_sets:
+        suisse:
+            download: false
+            criteria: { folios: [fpeu/suisse] }
+```
+
+Run `harvest:sync --folio=fpeu/suisse` (the scope avoids acquisitions requested by
+other sets), then open `/folio/fpeu/suisse/duckdb/search?language=es` or `en`.
+Apps with `locale_prefix: true` prepend their UI locale, for example `/en/folio/...`.
+All sets matching Suisse must have `download: false`. The native PDO DuckDB 2.x
+and `httpfs` extensions are required. Credentials stay in application environment
+configuration and are never obtained from the public catalog.
+
+Remote mode selects exclusively from the consumer's synced metadata. Missing
+snapshots or languages return 404, rather than silently using a local file or a
+different language. Language selection persists per dataset in the browser session
+for live searches; tabs share that selection. Snapshot replacements and withdrawals
+follow normal sync. `HarvestCatalog::remoteSnapshots()` exposes the typed entries.
+Existing SQLite readers and local acquisition remain available; remote mode wires
+the optional DuckDB routes, it does not translate an application's custom SQLite SQL.

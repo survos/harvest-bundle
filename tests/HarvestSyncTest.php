@@ -238,6 +238,82 @@ final class HarvestSyncTest extends TestCase
         self::assertSame(['photos'], $b->tags);
     }
 
+    public function testRemoteTranslationsSurviveMetadataOnlySyncAndSelectLanguageWithoutDownloads(): void
+    {
+        $this->installSchema();
+        foreach (['en' => 'a', 'es' => 'b'] as $locale => $hash) {
+            $artifact = $this->remote[0][Field::ARTIFACTS][0];
+            $artifact[ItemField::TYPE] = Field::DUCKDB_TYPE;
+            $artifact[Field::CODE] = Field::S3_CODE.'.'.$locale;
+            $artifact[Field::LOCALE] = $locale;
+            $artifact[Field::AVAILABLE] = true;
+            $artifact[Field::DOWNLOAD_URL] = null;
+            $artifact[Field::REMOTE_URI] = 's3://bucket/dfolio/curatescape/a/'.str_repeat($hash, 64).'.dfolio';
+            $this->remote[0][Field::ARTIFACTS][] = $artifact;
+        }
+        $never = $this->createMock(FolioAcquisition::class);
+        $never->expects(self::never())->method('acquire');
+        self::assertSame(0, $this->sync($never, download: false)->sync($this->io(), full: true));
+        $this->em->clear();
+        self::assertSame(['en', 'es'], $this->em->find(Dataset::class, 'curatescape/a')->locales);
+        self::assertSame([], $this->catalog->acquiredRevisions());
+        $requests = new \Symfony\Component\HttpFoundation\RequestStack();
+        $session = new \Symfony\Component\HttpFoundation\Session\Session(new \Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage());
+        $request = \Symfony\Component\HttpFoundation\Request::create('/search?language=es');
+        $request->setSession($session);
+        $requests->push($request);
+        $locator = new \Survos\HarvestBundle\Catalog\HarvestDuckDbFolioLocator($this->catalog, $requests, 'en');
+        $snapshots = $this->catalog->remoteSnapshots('curatescape/a');
+        self::assertSame($snapshots['es']->uri, $locator->locate('curatescape/a'));
+        $request->query->remove('language');
+        self::assertSame($snapshots['es']->uri, $locator->locate('curatescape/a'), 'Live requests retain content language');
+        $request->query->set('language', 'en');
+        self::assertSame($snapshots['en']->uri, $locator->locate('curatescape/a'));
+        self::assertCount(3, $this->requests, 'Reading metadata never calls the producer or downloads snapshots');
+        $request->query->set('language', 'de');
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class);
+        $locator->locate('curatescape/a');
+    }
+
+    public function testRemoteSnapshotReplacementAndWithdrawalDoNotLeaveStaleAddresses(): void
+    {
+        $this->installSchema();
+        $remote = $this->remote[0][Field::ARTIFACTS][0];
+        $remote[ItemField::TYPE] = Field::DUCKDB_TYPE;
+        $remote[Field::CODE] = Field::S3_CODE.'.en';
+        $remote[Field::LOCALE] = 'en';
+        $remote[Field::AVAILABLE] = true;
+        $remote[Field::DOWNLOAD_URL] = null;
+        $remote[Field::REMOTE_URI] = 's3://bucket/dfolio/curatescape/a/'.str_repeat('a', 64).'.dfolio';
+        $this->remote[0][Field::ARTIFACTS][] = $remote;
+        $never = $this->createMock(FolioAcquisition::class);
+        $never->expects(self::never())->method('acquire');
+        $sync = $this->sync($never, download: false);
+        self::assertSame(0, $sync->sync($this->io(), full: true));
+        $next = 's3://bucket/dfolio/curatescape/a/'.str_repeat('b', 64).'.dfolio';
+        $this->remote[0][Field::ARTIFACTS][1][Field::REMOTE_URI] = $next;
+        $this->remote[0][Field::ARTIFACTS][1][Field::REVISION] = 'revision:2';
+        self::assertSame(0, $sync->sync($this->io(), full: true));
+        self::assertSame($next, $this->catalog->remoteSnapshots('curatescape/a')['en']->uri);
+        self::assertSame('revision:2', $this->catalog->remoteSnapshots('curatescape/a')['en']->revision);
+        array_pop($this->remote[0][Field::ARTIFACTS]);
+        self::assertSame(0, $sync->sync($this->io(), full: true));
+        self::assertSame([], $this->catalog->remoteSnapshots('curatescape/a'));
+        self::assertSame([], $this->em->find(Dataset::class, 'curatescape/a')->locales);
+    }
+
+    public function testCredentialBearingRemoteUriIsRejected(): void
+    {
+        $dataset = self::dataset('curatescape/a');
+        $dataset[Field::ARTIFACTS] = [[
+            ItemField::TYPE => Field::DUCKDB_TYPE, Field::AVAILABLE => true,
+            Field::REMOTE_URI => 's3://key:secret@bucket/dfolio/curatescape/a/'.str_repeat('a', 64).'.dfolio',
+            Field::LOCALE => 'en', Field::REVISION => 'revision:1',
+        ]];
+        $this->expectException(\UnexpectedValueException::class);
+        \Survos\FolioBundle\Catalog\RemoteDuckDbSnapshot::fromDataset($dataset);
+    }
+
     public function testRevisionChangesAndDeselectionPreserveAcquisitionHistory(): void
     {
         $this->installSchema();

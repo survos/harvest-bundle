@@ -59,6 +59,14 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
             ->end()->end()->end()
             ->booleanNode('local_passthrough')->defaultFalse()->end()
             ->arrayNode('duckdb')->addDefaultsIfNotSet()->children()
+                ->booleanNode('remote')->info('Read published S3 snapshots from synced metadata instead of local DuckDB files.')->defaultFalse()->end()
+                ->scalarNode('default_locale')->defaultValue('en')->cannotBeEmpty()->end()
+                ->arrayNode('s3')->children()
+                    ->scalarNode('endpoint')->isRequired()->cannotBeEmpty()->end()
+                    ->scalarNode('access_key')->isRequired()->cannotBeEmpty()->end()
+                    ->scalarNode('secret_key')->isRequired()->cannotBeEmpty()->end()
+                    ->scalarNode('region')->isRequired()->cannotBeEmpty()->end()
+                ->end()->end()
                 ->booleanNode('enabled')->info('Prepare a local DuckDB companion after acquiring each selected folio. Requires native PDO DuckDB 2.x.')->defaultFalse()->end()
                 ->booleanNode('fts')->info('Include a persisted title/description FTS index in the companion.')->defaultFalse()->end()
             ->end()->end()
@@ -91,6 +99,19 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
         parent::loadExtension($config, $container, $builder);
         $services = $container->services()->defaults()->autowire()->autoconfigure();
         $services->set(HarvestCatalog::class)->arg('$em', new Reference(EntityManagerInterface::class));
+        if ($config['duckdb']['remote']) {
+            if (!isset($config['duckdb']['s3'])) {
+                throw new \InvalidArgumentException('Remote DuckDB browsing requires duckdb.s3 configuration.');
+            }
+            $services->set(Catalog\HarvestDuckDbFolioLocator::class)
+                ->arg('$defaultLocale', $config['duckdb']['default_locale']);
+            $services->alias(\Survos\FolioBundle\Service\DuckDbFolioLocatorInterface::class, Catalog\HarvestDuckDbFolioLocator::class);
+            $s3 = $config['duckdb']['s3'];
+            $services->set(\Survos\FolioBundle\Dto\DuckDbS3Configuration::class)->lazy()->args([
+                '$endpoint' => $s3['endpoint'], '$accessKey' => $s3['access_key'],
+                '$secretKey' => $s3['secret_key'], '$region' => $s3['region'],
+            ]);
+        }
         $services->set(RecordedMembership::class);
         $services->set(SetItemSource::class)->arg('$sets', $config['folio_sets']);
         $services->alias(RecordedMembershipProvider::class, RecordedMembership::class);
@@ -132,6 +153,9 @@ final class SurvosHarvestBundle extends AbstractSurvosBundle
         $config = (new Processor())->processConfiguration($this->getContainerExtension()->getConfiguration($configs, $builder), $configs);
         foreach (['server', 'read_token', 'local_passthrough'] as $key) {
             $builder->setParameter('survos_harvest.'.$key, $config[$key]);
+        }
+        if ($config['duckdb']['remote']) {
+            $builder->prependExtensionConfig('survos_folio', ['duckdb_browse' => true]);
         }
         $builder->prependExtensionConfig('survos_folio', [
             'folio_server' => '%survos_harvest.server%',

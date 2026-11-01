@@ -10,6 +10,7 @@ use Survos\DataContracts\Vocabulary\ItemField;
 use Survos\FolioBundle\Catalog\DatasetField as Field;
 use Survos\FolioBundle\Catalog\DatasetPublicationClient;
 use Survos\FolioBundle\Catalog\FolioCatalogEntry;
+use Survos\FolioBundle\Catalog\RemoteDuckDbSnapshot;
 use Survos\HarvestBundle\Entity\Artifact;
 use Survos\HarvestBundle\Entity\Dataset;
 use Survos\HarvestBundle\Entity\HarvestSyncCheckpoint;
@@ -120,6 +121,14 @@ final readonly class HarvestCatalog
         return null;
     }
 
+    /** @return array<string, RemoteDuckDbSnapshot> Read synced metadata without contacting Harvest. */
+    public function remoteSnapshots(string $key): array
+    {
+        $dataset = $this->em->find(Dataset::class, $key);
+
+        return null === $dataset ? [] : RemoteDuckDbSnapshot::fromDataset($dataset->payload);
+    }
+
     public function isStale(): bool
     {
         return !$this->schemaReady() || null === $this->checkpoint();
@@ -166,6 +175,9 @@ final readonly class HarvestCatalog
                     array_filter(FolioCatalogEntry::fromDataset($payload, $this->client),
                         static fn (FolioCatalogEntry $entry): bool => null !== $entry->locale),
                 )));
+                $dataset->locales = array_values(array_unique([
+                    ...$dataset->locales, ...array_keys(RemoteDuckDbSnapshot::fromDataset($payload)),
+                ]));
                 $dataset->syncedAt = $now;
                 $this->em->persist($dataset);
                 $datasets[$key] = $dataset;
