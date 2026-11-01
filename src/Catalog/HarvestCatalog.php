@@ -126,7 +126,8 @@ final readonly class HarvestCatalog
     {
         $dataset = $this->em->find(Dataset::class, $key);
 
-        return null === $dataset ? [] : RemoteDuckDbSnapshot::fromDataset($dataset->payload);
+        return null === $dataset || $dataset->source !== $this->client->source()
+            ? [] : RemoteDuckDbSnapshot::fromDataset($dataset->payload);
     }
 
     public function isStale(): bool

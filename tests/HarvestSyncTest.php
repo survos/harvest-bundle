@@ -302,6 +302,52 @@ final class HarvestSyncTest extends TestCase
         self::assertSame([], $this->em->find(Dataset::class, 'curatescape/a')->locales);
     }
 
+    public function testRemoteInventoryBootstrapsViaApiThenChangesWithoutDownloads(): void
+    {
+        $this->installSchema();
+        $key = 'curatescape/a';
+        $this->remote[0][Field::ARTIFACTS] = [[
+            ItemField::TYPE => Field::DUCKDB_TYPE, Field::CODE => Field::S3_CODE,
+            Field::AVAILABLE => true, Field::LOCALE => 'en', Field::REVISION => 'revision:1',
+            Field::DOWNLOAD_URL => null, Field::REMOTE_URI => 's3://bucket/dfolio/'.$key.'/'.str_repeat('a', 64).'.dfolio',
+        ]];
+        $never = $this->createMock(FolioAcquisition::class);
+        $never->expects(self::never())->method('acquire');
+        $sync = $this->sync($never, download: false);
+        self::assertSame(0, $sync->sync($this->io()));
+        self::assertCount(1, $this->catalog->remoteSnapshots($key));
+        $dataset = $this->remote[0];
+        $dataset[Field::ARTIFACTS][0][Field::REVISION] = 'revision:2';
+        $dataset[Field::ARTIFACTS][0][Field::REMOTE_URI] = 's3://bucket/dfolio/'.$key.'/'.str_repeat('b', 64).'.dfolio';
+        $seen = [];
+        $this->http->setResponseFactory(static function (string $method, string $url) use (&$seen, &$dataset, $key): MockResponse {
+            $seen[] = $url;
+            if (str_contains($url, '/api/changes')) {
+                return new MockResponse(json_encode([Field::CURSOR => 'epoch:2', Field::THROUGH => 'epoch:2',
+                    Field::ITEMS => [[Field::DATASET_KEY => $key]], Field::HAS_MORE => false], JSON_THROW_ON_ERROR));
+            }
+            if (str_ends_with($url, '/api/datasets/'.$key)) {
+                return new MockResponse(json_encode($dataset, JSON_THROW_ON_ERROR));
+            }
+            throw new \LogicException('Delta sync must not rescan or download: '.$url);
+        });
+        self::assertSame(0, $sync->sync($this->io()));
+        self::assertCount(2, $seen);
+        self::assertSame('revision:2', $this->catalog->remoteSnapshots($key)['en']->revision);
+        self::assertSame('epoch:2', $this->catalog->checkpoint()[Field::CURSOR]);
+        self::assertSame([], $this->catalog->acquiredRevisions());
+        // A failed delta must preserve the usable address and cursor together.
+        $this->http->setResponseFactory(static fn (): MockResponse => new MockResponse('{"error":"denied"}', ['http_code' => 403]));
+        try {
+            $sync->sync($this->io());
+        } catch (\Throwable) {
+        }
+        self::assertSame('epoch:2', $this->catalog->checkpoint()[Field::CURSOR]);
+        self::assertSame('revision:2', $this->catalog->remoteSnapshots($key)['en']->revision);
+        $foreign = new HarvestCatalog($this->em, new DatasetPublicationClient($this->http, 'https://other.example', ''));
+        self::assertSame([], $foreign->remoteSnapshots($key), 'Do not use another source catalog before reconciliation.');
+    }
+
     public function testRemoteOnlyDatasetCanBeScopedWithoutASqliteVariant(): void
     {
         $this->installSchema();
