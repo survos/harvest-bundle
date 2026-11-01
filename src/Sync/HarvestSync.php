@@ -55,7 +55,7 @@ final readonly class HarvestSync
             $saved = $ready ? $this->catalog->checkpoint() : null;
             $previous = $ready ? $this->catalog->acquiredRevisions() : [];
             $plan = $this->selection->plan($this->client->changes($saved, $full), $this->client);
-            $selectedKeys = array_map(static fn ($entry): string => $entry->datasetKey, $plan->entries);
+            $selectedKeys = array_keys(array_merge(...array_values($plan->membership)));
             $unknown = array_diff($folio, $selectedKeys);
             if ([] !== $unknown) {
                 throw new \InvalidArgumentException('Folios outside the application selection: '.implode(', ', $unknown));

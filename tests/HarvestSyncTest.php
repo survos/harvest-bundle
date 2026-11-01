@@ -302,6 +302,22 @@ final class HarvestSyncTest extends TestCase
         self::assertSame([], $this->em->find(Dataset::class, 'curatescape/a')->locales);
     }
 
+    public function testRemoteOnlyDatasetCanBeScopedWithoutASqliteVariant(): void
+    {
+        $this->installSchema();
+        $this->remote[0][Field::ARTIFACTS] = [[
+            ItemField::TYPE => Field::DUCKDB_TYPE, Field::CODE => Field::S3_CODE.'.en',
+            Field::AVAILABLE => true, Field::LOCALE => 'en', Field::REVISION => 'revision:1',
+            Field::DOWNLOAD_URL => null,
+            Field::REMOTE_URI => 's3://bucket/dfolio/curatescape/a/'.str_repeat('a', 64).'.dfolio',
+        ]];
+        $never = $this->createMock(FolioAcquisition::class);
+        $never->expects(self::never())->method('acquire');
+        self::assertSame(0, $this->sync($never, download: false)->sync($this->io(), full: true, folio: ['curatescape/a']));
+        self::assertCount(1, $this->catalog->remoteSnapshots('curatescape/a'));
+        self::assertCount(1, $this->em->getRepository(SetMembership::class)->findAll());
+    }
+
     public function testCredentialBearingRemoteUriIsRejected(): void
     {
         $dataset = self::dataset('curatescape/a');
