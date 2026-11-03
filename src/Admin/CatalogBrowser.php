@@ -32,7 +32,7 @@ final readonly class CatalogBrowser
         $total = (int) (clone $builder)->select('COUNT(d.datasetKey)')->getQuery()->getSingleScalarResult();
         $pages = max(1, (int) ceil($total / self::PAGE_SIZE));
         $page = min(max(1, $page), $pages);
-        $items = $builder->select('d')->orderBy('d.datasetKey', 'ASC')->setFirstResult(($page - 1) * self::PAGE_SIZE)->setMaxResults(self::PAGE_SIZE)->getQuery()->getResult();
+        $items = $builder->select('d')->orderBy('d.datasetKey')->setFirstResult(($page - 1) * self::PAGE_SIZE)->setMaxResults(self::PAGE_SIZE)->getQuery()->getResult();
 
         return ['items' => $items, 'total' => $total, 'page' => $page, 'pages' => $pages];
     }
