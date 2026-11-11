@@ -55,6 +55,7 @@ final class AdminKernel extends Kernel
     protected function configureContainer(ContainerConfigurator $container): void
     {
         $container->extension('framework', ['secret' => 'test-only', 'test' => true, 'csrf_protection' => true,
+            'cache' => ['app' => 'cache.adapter.array'],
             'router' => ['utf8' => true], 'session' => ['storage_factory_id' => 'session.storage.factory.mock_file']]);
         $container->extension('twig', ['default_path' => __DIR__.'/templates', 'strict_variables' => true]);
         $container->extension('security', [

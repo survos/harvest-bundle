@@ -93,8 +93,8 @@ final class AdminUiTest extends TestCase
         return [Field::DATASET_KEY => 'curatescape/baltimore', PropertyKey::LABEL => 'Baltimore Heritage',
             ItemField::DESCRIPTION => 'Explore the places and stories that shaped Baltimore.', Field::PROVIDER => 'curatescape',
             PropertyKey::TAGS => ['tours', 'history'], PropertyKey::CONTENT_TYPE => null, PropertyKey::ROW_COUNT => 547,
-            Field::ARTIFACTS => [[ItemField::TYPE => Field::FOLIO_ARCHIVE_TYPE, Field::CODE => Field::DEFAULT_CODE,
+            Field::ARTIFACTS => [[ItemField::TYPE => Field::DUCKDB_TYPE, Field::CODE => Field::DEFAULT_CODE, Field::AVAILABLE => true,
                 Field::REVISION => 'r1', Field::CHECKSUM => null, Field::SIZE_BYTES => 120000, Field::UPDATED_AT => null,
-                Field::COMPRESSED => true, Field::DOWNLOAD_URL => '/api/datasets/curatescape/baltimore/artifacts/1/download?revision=r1']]];
+                Field::COMPRESSED => false, Field::DOWNLOAD_URL => '/api/datasets/curatescape/baltimore/artifacts/1/download?revision=r1']]];
     }
 }

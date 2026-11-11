@@ -79,7 +79,7 @@ final class HarvestSyncTest extends TestCase
         self::assertSame(0, $this->sync($acquire)->sync($this->io(), full: true));
         $this->em->clear();
         self::assertCount(2, $this->em->getRepository(Dataset::class)->findAll());
-        self::assertCount(2, $this->em->getRepository(Artifact::class)->findAll());
+        self::assertCount(4, $this->em->getRepository(Artifact::class)->findAll());
         self::assertCount(1, $this->em->getRepository(SetMembership::class)->findAll());
         $a = $this->em->find(Dataset::class, 'curatescape/a');
         self::assertSame([2, [], null, []], [$a->rowCount, $a->tags, $a->contentType, $a->locales],
@@ -219,7 +219,7 @@ final class HarvestSyncTest extends TestCase
         $datasets = $this->em->getRepository(Dataset::class)->findAll();
         self::assertSame(['curatescape/c'], array_map(static fn (Dataset $d): string => $d->datasetKey, $datasets));
         self::assertSame('https://harvest.other', $datasets[0]->source);
-        self::assertCount(1, $this->em->getRepository(Artifact::class)->findAll());
+        self::assertCount(2, $this->em->getRepository(Artifact::class)->findAll());
         self::assertSame([], $this->catalog->acquiredRevisions(), 'the first Harvest\'s receipts must not survive');
         self::assertSame('https://harvest.other', $this->catalog->checkpoint()[Field::SOURCE]);
     }
@@ -291,8 +291,8 @@ final class HarvestSyncTest extends TestCase
         $sync = $this->sync($never, download: false);
         self::assertSame(0, $sync->sync($this->io(), full: true));
         $next = 's3://bucket/dfolio/curatescape/a/'.str_repeat('b', 64).'.dfolio';
-        $this->remote[0][Field::ARTIFACTS][1][Field::REMOTE_URI] = $next;
-        $this->remote[0][Field::ARTIFACTS][1][Field::REVISION] = 'revision:2';
+        $this->remote[0][Field::ARTIFACTS][2][Field::REMOTE_URI] = $next;
+        $this->remote[0][Field::ARTIFACTS][2][Field::REVISION] = 'revision:2';
         self::assertSame(0, $sync->sync($this->io(), full: true));
         self::assertSame($next, $this->catalog->remoteSnapshots('curatescape/a')['en']->uri);
         self::assertSame('revision:2', $this->catalog->remoteSnapshots('curatescape/a')['en']->revision);
@@ -362,6 +362,30 @@ final class HarvestSyncTest extends TestCase
         self::assertSame(0, $this->sync($never, download: false)->sync($this->io(), full: true, folio: ['curatescape/a']));
         self::assertCount(1, $this->catalog->remoteSnapshots('curatescape/a'));
         self::assertCount(1, $this->em->getRepository(SetMembership::class)->findAll());
+    }
+
+    public function testDfolioOnlyDatasetIsVisibleWithoutSqliteAcquisition(): void
+    {
+        $this->installSchema();
+        $this->remote = [self::dataset('curatescape/a')];
+        $artifact = $this->remote[0][Field::ARTIFACTS][1];
+        $artifact[Field::CODE] = Field::S3_CODE;
+        $artifact[Field::REMOTE_URI] = 's3://bucket/dfolio/curatescape/a.dfolio';
+        $this->remote[0][Field::ARTIFACTS] = [$artifact];
+        $never = $this->createMock(FolioAcquisition::class);
+        $never->expects(self::never())->method('acquire');
+        // Even a set configured to acquire SQLite archives must not mislabel a
+        // dfolio or require a local SQLite file to list its published records.
+        self::assertSame(0, $this->sync($never)->sync($this->io(), full: true));
+        $this->em->clear();
+        self::assertCount(1, $this->catalog->members('tours'));
+        self::assertSame(2, $this->catalog->find('curatescape/a')->rowCount);
+        self::assertSame(Field::DUCKDB_TYPE, $this->catalog->find('curatescape/a')->artifactType);
+        self::assertSame([], $this->catalog->acquiredRevisions());
+        $this->remote[0][Field::ARTIFACTS][0][Field::AVAILABLE] = false;
+        self::assertSame(0, $this->sync($never)->sync($this->io(), full: true));
+        self::assertSame([], $this->catalog->members('tours'));
+        self::assertNull($this->catalog->find('curatescape/a'));
     }
 
     public function testCredentialBearingRemoteUriIsRejected(): void
@@ -597,6 +621,9 @@ final class HarvestSyncTest extends TestCase
                 Field::CODE => Field::DEFAULT_CODE, Field::REVISION => 'revision:1', Field::CHECKSUM => null,
                 Field::SIZE_BYTES => 100, Field::UPDATED_AT => null, Field::COMPRESSED => true,
                 Field::DOWNLOAD_URL => '/api/datasets/'.$key.'/artifacts/1/download?revision=revision:1',
+            ], [ItemField::TYPE => Field::DUCKDB_TYPE, Field::CODE => Field::DEFAULT_CODE,
+                Field::REVISION => 'dfolio:1', Field::AVAILABLE => true, Field::LOCALE => 'en',
+                Field::DOWNLOAD_URL => null, Field::REMOTE_URI => null,
             ]]];
     }
 }

@@ -40,7 +40,7 @@ final readonly class SetItemSource
     {
         $this->criteria($setCode); // Validate the name before consulting recorded membership.
         $codes = [];
-        foreach ($this->catalog->members($setCode) as $entry) {
+        foreach ($this->catalog->sqliteMembers($setCode) as $entry) {
             $codes[$entry->datasetKey] = $entry->datasetKey;
         }
 

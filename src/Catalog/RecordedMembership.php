@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Survos\HarvestBundle\Catalog;
 
+use Survos\FolioBundle\Catalog\DatasetField;
 use Survos\FolioBundle\Service\FolioService;
 use Survos\FolioBundle\Set\RecordedMembershipProvider;
 
@@ -26,7 +27,8 @@ final readonly class RecordedMembership implements RecordedMembershipProvider
             $members[] = ['datasetKey' => $entry->datasetKey, 'label' => $entry->title,
                 'provider' => $entry->provider, 'tags' => $entry->tags, 'rowCount' => $entry->rowCount,
                 'contentTypes' => null === $entry->contentType ? [] : [$entry->contentType],
-                'inCatalog' => true, 'downloadUrl' => $entry->downloadUrl, 'local' => $local, 'available' => null !== $local];
+                'inCatalog' => true, 'downloadUrl' => $entry->downloadUrl, 'local' => $local,
+                'available' => DatasetField::DUCKDB_TYPE === $entry->artifactType || null !== $local];
         }
 
         return $members;

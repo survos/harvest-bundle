@@ -338,3 +338,9 @@ for live searches; tabs share that selection. Snapshot replacements and withdraw
 follow normal sync. `HarvestCatalog::remoteSnapshots()` exposes the typed entries.
 Existing SQLite readers and local acquisition remain available; remote mode wires
 the optional DuckDB routes, it does not translate an application's custom SQLite SQL.
+
+### Reader format and archives
+
+Catalog browsing (`members()` and `find()`) requires an available dfolio (`duckdb` artifact). Local and remote copies of the same variant appear once; datasets with only `.folio` or `.folio.gz` are hidden from reader catalogs.
+
+SQLite remains an explicit archive/Unity use case: `sqliteMembers()` and `FolioCatalogClient::sqliteEntries()` expose those artifacts. Download-enabled sets acquire only SQLite artifacts; dfolio discovery never downloads a dfolio into a `.folio` path.

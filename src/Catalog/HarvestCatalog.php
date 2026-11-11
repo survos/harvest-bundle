@@ -95,9 +95,20 @@ final readonly class HarvestCatalog
     /** @return list<FolioCatalogEntry> Recorded membership, usable without any Harvest HTTP call. */
     public function members(string $setCode): array
     {
+        return $this->setEntries($setCode, FolioCatalogEntry::fromDataset(...));
+    }
+
+    /** Explicit local SQLite iteration/export; not the public reader catalog. */
+    public function sqliteMembers(string $setCode): array
+    {
+        return $this->setEntries($setCode, FolioCatalogEntry::fromSqliteDataset(...));
+    }
+
+    private function setEntries(string $setCode, callable $convert): array
+    {
         $entries = [];
         foreach ($this->em->getRepository(SetMembership::class)->findBy(['setCode' => $setCode]) as $member) {
-            foreach (FolioCatalogEntry::fromDataset($member->dataset->payload, $this->client) as $entry) {
+            foreach ($convert($member->dataset->payload, $this->client) as $entry) {
                 $entries[] = $entry;
             }
         }
@@ -173,7 +184,7 @@ final readonly class HarvestCatalog
                 $dataset->contentType = $payload[PropertyKey::CONTENT_TYPE] ?? null;
                 $dataset->locales = array_values(array_unique(array_map(
                     static fn (FolioCatalogEntry $entry): string => (string) $entry->locale,
-                    array_filter(FolioCatalogEntry::fromDataset($payload, $this->client),
+                    array_filter([...FolioCatalogEntry::fromDataset($payload, $this->client), ...FolioCatalogEntry::fromSqliteDataset($payload, $this->client)],
                         static fn (FolioCatalogEntry $entry): bool => null !== $entry->locale),
                 )));
                 $dataset->locales = array_values(array_unique([

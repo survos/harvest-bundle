@@ -14,7 +14,7 @@
         "doctrine/orm": "^3.7",
         "php": "^8.5",
         "survos/data-contracts": "^2.5",
-        "survos/folio-bundle": "^2.45.16",
+        "survos/folio-bundle": "^2.45.41",
         "survos/kit-bundle": "^2.36",
         "symfony/cache": "^8.1",
         "symfony/config": "^8.1",

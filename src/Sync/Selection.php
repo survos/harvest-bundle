@@ -36,7 +36,9 @@ final readonly class Selection implements HarvestSelection
                     continue;
                 }
                 $membership[$setCode][$key] = $set['download'];
-                foreach (FolioCatalogEntry::fromDataset($dataset, $client) as $entry) {
+                // Acquisition remains an explicit SQLite/archive concern. Reader
+                // discovery uses published dfolios through HarvestCatalog instead.
+                foreach (FolioCatalogEntry::fromSqliteDataset($dataset, $client) as $entry) {
                     $id = Artifact::identity($key, $entry->artifactType, $entry->artifactCode());
                     $entries[$id] = $entry;
                     $downloads[$id] = ($downloads[$id] ?? false) || $set['download'];
