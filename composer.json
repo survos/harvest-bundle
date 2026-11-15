@@ -10,7 +10,7 @@
     "type": "symfony-bundle",
     "require": {
         "doctrine/dbal": "^4.4",
-        "doctrine/doctrine-bundle": "^3.0",
+        "doctrine/doctrine-bundle": "^3.4",
         "doctrine/orm": "^3.7",
         "php": "^8.5",
         "survos/data-contracts": "^2.5",
