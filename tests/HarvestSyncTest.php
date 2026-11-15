@@ -270,6 +270,18 @@ final class HarvestSyncTest extends TestCase
         $request->query->set('language', 'en');
         self::assertSame($snapshots['en']->uri, $locator->locate('curatescape/a'));
         self::assertCount(3, $this->requests, 'Reading metadata never calls the producer or downloads snapshots');
+        $root = sys_get_temp_dir().'/harvest-locator-'.bin2hex(random_bytes(6));
+        $paths = new \Survos\DataContracts\Path\DataPaths($root);
+        $local = dirname($paths->folioFile('curatescape/a', 'dfolio', true)).'/'.basename($snapshots['en']->uri);
+        touch($local);
+        try {
+            $localFirst = new \Survos\HarvestBundle\Catalog\HarvestDuckDbFolioLocator($this->catalog, $requests, 'en', $paths);
+            self::assertSame($local, $localFirst->locate('curatescape/a'), 'A local copy is read before the published address');
+            $request->query->set('language', 'es');
+            self::assertSame($snapshots['es']->uri, $localFirst->locate('curatescape/a'), 'Another language has no local copy');
+        } finally {
+            (new \Symfony\Component\Filesystem\Filesystem())->remove($root);
+        }
         $request->query->set('language', 'de');
         $this->expectException(\Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class);
         $locator->locate('curatescape/a');

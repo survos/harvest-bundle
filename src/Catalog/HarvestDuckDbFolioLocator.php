@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace Survos\HarvestBundle\Catalog;
 
+use Survos\DataContracts\Path\DataPaths;
 use Survos\FolioBundle\Service\DuckDbFolioConnection;
 use Survos\FolioBundle\Service\DuckDbFolioLocatorInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/** Remote reads use only the consumer's synchronized metadata; never producer paths. */
+/**
+ * A dfolio in the application's data directory is read before the published address. Without a local copy the
+ * address comes from the consumer's synchronized metadata; never from producer paths.
+ */
 final readonly class HarvestDuckDbFolioLocator implements DuckDbFolioLocatorInterface
 {
     public function __construct(private HarvestCatalog $catalog, private RequestStack $requests,
-        private string $defaultLocale)
+        private string $defaultLocale, private ?DataPaths $paths = null)
     {
     }
 
@@ -21,18 +25,34 @@ final readonly class HarvestDuckDbFolioLocator implements DuckDbFolioLocatorInte
     {
         DuckDbFolioConnection::validate($folioCode);
         $snapshots = $this->catalog->remoteSnapshots($folioCode);
-        if ([] === $snapshots) {
-            throw new NotFoundHttpException('No published remote DuckDB snapshot. Run harvest:sync after publication.');
-        }
         $request = $this->requests->getMainRequest();
         $session = $request?->hasSession() ? $request->getSession() : null;
         $sessionKey = 'dfolio_language.'.$folioCode;
         $locale = $request?->query->getString('language') ?: ($session?->get($sessionKey) ?? $this->defaultLocale);
-        if (!isset($snapshots[$locale])) {
-            throw new NotFoundHttpException('Language not published for this dataset: '.$locale);
+        $local = $this->local($folioCode, $locale, $snapshots);
+        if (null === $local && !isset($snapshots[$locale])) {
+            throw new NotFoundHttpException([] === $snapshots ? 'No local dfolio and no published remote DuckDB snapshot. Run folio:pull, or harvest:sync after publication.' : 'Language not published for this dataset: '.$locale);
         }
         $session?->set($sessionKey, $locale);
 
-        return $snapshots[$locale]->uri;
+        return $local ?? $snapshots[$locale]->uri;
+    }
+
+    /**
+     * The local file has the published file's name: <code>.dfolio for the source language, <code>.<locale>.dfolio
+     * for a translation. With no publication to name it, only the source-language file is known.
+     *
+     * @param array<string,\Survos\FolioBundle\Catalog\RemoteDuckDbSnapshot> $snapshots
+     */
+    private function local(string $folioCode, string $locale, array $snapshots): ?string
+    {
+        if (null === $this->paths) {
+            return null;
+        }
+        $source = $this->paths->folioFile($folioCode, 'dfolio');
+        $file = isset($snapshots[$locale]) ? dirname($source).'/'.basename($snapshots[$locale]->uri)
+            : ([] === $snapshots && $locale === $this->defaultLocale ? $source : null);
+
+        return null !== $file && is_file($file) && is_readable($file) ? $file : null;
     }
 }
