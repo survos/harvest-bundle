@@ -48,23 +48,6 @@ final readonly class SetItemSource
     }
 
     /**
-     * Folios recorded for the set in the public catalog (dfolio or SQLite alike). Use this to check
-     * that a search stays inside the set; folios() only lists members with a local SQLite file.
-     *
-     * @return list<string>
-     */
-    public function recordedFolios(string $setCode): array
-    {
-        $this->criteria($setCode);
-        $codes = [];
-        foreach ($this->catalog->members($setCode) as $entry) {
-            $codes[$entry->datasetKey] = $entry->datasetKey;
-        }
-
-        return array_values($codes);
-    }
-
-    /**
      * Uses recorded membership; never syncs, fetches, or downloads.
      * Missing/unreadable local files are reported through $report, like FolioDocumentStream.
      * A document retains rowId, folioCode, coreCode and localId for source identity.
