@@ -272,13 +272,22 @@ final class HarvestSyncTest extends TestCase
         self::assertCount(3, $this->requests, 'Reading metadata never calls the producer or downloads snapshots');
         $root = sys_get_temp_dir().'/harvest-locator-'.bin2hex(random_bytes(6));
         $paths = new \Survos\DataContracts\Path\DataPaths($root);
-        $local = dirname($paths->folioFile('curatescape/a', 'dfolio', true)).'/'.basename($snapshots['en']->uri);
+        $local = $paths->folioFile('curatescape/a', 'dfolio', true);
         touch($local);
         try {
             $localFirst = new \Survos\HarvestBundle\Catalog\HarvestDuckDbFolioLocator($this->catalog, $requests, 'en', $paths);
             self::assertSame($local, $localFirst->locate('curatescape/a'), 'A local copy is read before the published address');
             $request->query->set('language', 'es');
             self::assertSame($snapshots['es']->uri, $localFirst->locate('curatescape/a'), 'Another language has no local copy');
+            $translated = substr($local, 0, -strlen('.dfolio')).'.es.dfolio';
+            touch($translated);
+            self::assertSame($translated, $localFirst->locate('curatescape/a'), 'Translations use their own canonical cache file');
+            unlink($translated);
+            unlink($local);
+            $legacy = dirname($local).'/'.basename($snapshots['en']->uri);
+            touch($legacy);
+            $request->query->set('language', 'en');
+            self::assertSame($legacy, $localFirst->locate('curatescape/a'), 'Existing revision-named caches remain readable');
         } finally {
             (new \Symfony\Component\Filesystem\Filesystem())->remove($root);
         }
@@ -312,6 +321,32 @@ final class HarvestSyncTest extends TestCase
         self::assertSame(0, $sync->sync($this->io(), full: true));
         self::assertSame([], $this->catalog->remoteSnapshots('curatescape/a'));
         self::assertSame([], $this->em->find(Dataset::class, 'curatescape/a')->locales);
+    }
+
+    public function testNewspaperTagsSelectDfolioOnlyDatasetsWithUnknownCountsWithoutAcquisition(): void
+    {
+        $this->installSchema();
+        $key = 'news/paper';
+        $paper = self::dataset($key);
+        $paper[PropertyKey::CONTENT_TYPE] = null;
+        $paper[PropertyKey::ROW_COUNT] = 0;
+        $paper[PropertyKey::TAGS] = ['newspaper'];
+        $paper[Field::ARTIFACTS] = [[ItemField::TYPE => Field::DUCKDB_TYPE,
+            Field::CODE => Field::S3_CODE, Field::AVAILABLE => true, Field::LOCALE => 'en',
+            Field::REVISION => 'r1', Field::DOWNLOAD_URL => null,
+            Field::REMOTE_URI => 's3://bucket/dfolio/news/paper.dfolio']];
+        $this->remote = [$paper, self::dataset('museum/other')];
+        $selection = new Selection(['publications' => ['download' => false, 'criteria' => [
+            Field::PROVIDER => [], PropertyKey::TAGS => ['newspaper'], 'tagsAll' => [],
+            PropertyKey::CONTENT_TYPE => [], Field::FOLIOS => [], 'minRows' => 0]]]);
+        $never = $this->createMock(FolioAcquisition::class);
+        $never->expects(self::never())->method('acquire');
+        $sync = new HarvestSync($this->client, $this->catalog, $selection, $never, new LockFactory(new InMemoryStore()));
+        self::assertSame(0, $sync->sync($this->io()));
+        self::assertSame([$key], array_map(static fn ($entry) => $entry->datasetKey, $this->catalog->members('publications')));
+        self::assertSame([], $this->catalog->acquiredRevisions());
+        $locator = new \Survos\HarvestBundle\Catalog\HarvestDuckDbFolioLocator($this->catalog, new \Symfony\Component\HttpFoundation\RequestStack(), 'en');
+        self::assertSame('s3://bucket/dfolio/news/paper.dfolio', $locator->locate($key));
     }
 
     public function testRemoteInventoryBootstrapsViaApiThenChangesWithoutDownloads(): void

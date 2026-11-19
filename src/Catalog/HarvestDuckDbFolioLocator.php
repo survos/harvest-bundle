@@ -50,8 +50,21 @@ final readonly class HarvestDuckDbFolioLocator implements DuckDbFolioLocatorInte
             return null;
         }
         $source = $this->paths->folioFile($folioCode, 'dfolio');
-        $file = isset($snapshots[$locale]) ? dirname($source).'/'.basename($snapshots[$locale]->uri)
-            : ([] === $snapshots && $locale === $this->defaultLocale ? $source : null);
+        if (isset($snapshots[$locale])) {
+            $publishedName = basename($snapshots[$locale]->uri);
+            $legacyName = 1 === preg_match('/^[a-f0-9]{64}\.dfolio$/D', $publishedName);
+            // folio:pull and local builds use the canonical dataset path, not a remote revision hash.
+            $file = $legacyName
+                ? ($locale === $this->defaultLocale ? $source : substr($source, 0, -strlen('.dfolio')).'.'.$locale.'.dfolio')
+                : dirname($source).'/'.$publishedName;
+            if (is_file($file) && is_readable($file)) {
+                return $file;
+            }
+            // Retain compatibility with previously cached revision-named snapshots.
+            $file = dirname($source).'/'.$publishedName;
+        } else {
+            $file = [] === $snapshots && $locale === $this->defaultLocale ? $source : null;
+        }
 
         return null !== $file && is_file($file) && is_readable($file) ? $file : null;
     }

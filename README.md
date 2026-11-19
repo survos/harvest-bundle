@@ -331,9 +331,13 @@ All sets matching Suisse must have `download: false`. The native PDO DuckDB 2.x
 and `httpfs` extensions are required. Credentials stay in application environment
 configuration and are never obtained from the public catalog.
 
-Remote mode selects exclusively from the consumer's synced metadata. Missing
-snapshots or languages return 404, rather than silently using a local file or a
-different language. Language selection persists per dataset in the browser session
+The reader prefers a readable local dfolio, then the published S3 address from
+synced metadata. Canonical local files use `DataPaths::folioFile(code, 'dfolio')`,
+the same destination as `folio:pull` and local builds. Legacy hash-named S3 objects
+also check this canonical path (default/source locale) or `<code>.<locale>.dfolio`
+(translations), then their old revision-named cache path. A source-language local
+file never satisfies a request for a different language. Missing local files and
+published snapshots return 404. Language selection persists per dataset in the browser session
 for live searches; tabs share that selection. Snapshot replacements and withdrawals
 follow normal sync. `HarvestCatalog::remoteSnapshots()` exposes the typed entries.
 Existing SQLite readers and local acquisition remain available; remote mode wires
